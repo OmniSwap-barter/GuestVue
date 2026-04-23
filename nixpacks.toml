@@ -1,0 +1,8 @@
+[phases.install]
+cmds = ["npm install --legacy-peer-deps"]
+
+[phases.build]
+cmds = ["cd worker && npm install --legacy-peer-deps"]
+
+[start]
+cmd = "cd worker && npx tsx index.ts"
