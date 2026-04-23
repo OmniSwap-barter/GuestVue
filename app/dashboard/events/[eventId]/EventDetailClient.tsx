@@ -13,7 +13,7 @@ interface Props {
   initialUploads: Upload[]
 }
 
-type TabId = 'overview' | 'gallery' | 'slideshow' | 'reel' | 'embed' | 'settings'
+type TabId = 'overview' | 'gallery' | 'slideshow' | 'reel' | 'embed' | 'addons' | 'settings'
 type MediaFilter = 'all' | 'photos' | 'videos'
 
 export default function EventDetailClient({ event, initialUploads }: Props) {
@@ -170,6 +170,7 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
     { id: 'slideshow', label: 'Slideshow' },
     { id: 'reel', label: 'AI Reel' },
     { id: 'embed', label: 'Photo Wall' },
+    { id: 'addons', label: '✦ Add-ons' },
     { id: 'settings', label: 'Settings' },
   ]
 
@@ -665,6 +666,11 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
         </div>
       )}
 
+      {/* ── ADD-ONS ──────────────────────────────────────────────────────── */}
+      {tab === 'addons' && (
+        <AddOnsPanel event={event} />
+      )}
+
       {/* ── SETTINGS ─────────────────────────────────────────────────────── */}
       {tab === 'settings' && (
         <div className="space-y-4">
@@ -727,6 +733,171 @@ function EmbedCodeBlock({ eventId, eventName }: { eventId: string; eventName: st
       >
         {copied ? '✓ Copied!' : 'Copy'}
       </button>
+    </div>
+  )
+}
+
+// ─── Add-ons panel ────────────────────────────────────────────────────────────
+function AddOnsPanel({ event }: { event: Event }) {
+  const [purchasing, setPurchasing] = useState<string | null>(null)
+
+  const isPro = event.plan === 'pro'
+  const isFlex = event.plan === 'flex'
+  const isFree = event.plan === 'free'
+
+  const addons = [
+    {
+      id: 'uploads_100',
+      icon: '📸',
+      title: '+100 extra uploads',
+      desc: 'Add 100 more upload slots to this event. Can be purchased multiple times.',
+      price: '₦5,000',
+      priceKobo: 500000,
+      available: true,
+      highlight: false,
+      lockedOn: null as string | null,
+    },
+    {
+      id: 'page_extension_7d',
+      icon: '📅',
+      title: '+7 days page access',
+      desc: 'Extend the guest upload page by 7 more days so late-comers can still share.',
+      price: '₦3,000',
+      priceKobo: 300000,
+      available: true,
+      highlight: false,
+      lockedOn: null as string | null,
+    },
+    {
+      id: 'storage_extension_30d',
+      icon: '💾',
+      title: '+30 days storage',
+      desc: 'Keep all media stored and accessible for an additional 30 days.',
+      price: '₦2,000',
+      priceKobo: 200000,
+      available: true,
+      highlight: false,
+      lockedOn: null as string | null,
+    },
+    {
+      id: 'ai_reel',
+      icon: '🎬',
+      title: 'AI Highlight Reel',
+      desc: 'Our AI picks the best moments and creates a 60-second shareable video reel.',
+      price: '₦10,000',
+      priceKobo: 1000000,
+      available: !isPro,
+      highlight: true,
+      lockedOn: isPro ? 'Included with Pro' : null,
+    },
+    {
+      id: 'photo_wall',
+      icon: '🖼️',
+      title: 'Live Photo Wall',
+      desc: 'Real-time full-screen display to project at your venue. Updates as guests upload.',
+      price: '₦5,000',
+      priceKobo: 500000,
+      available: isFree,
+      highlight: false,
+      lockedOn: (!isFree) ? 'Included with your plan' : null,
+    },
+    {
+      id: 'upgrade_flex',
+      icon: '⚡',
+      title: 'Upgrade to Flex',
+      desc: '500 uploads, AI Basic Reel, Live Photo Wall, and 30-day page. Worth it for any mid-size event.',
+      price: '₦24,999',
+      priceKobo: 2499900,
+      available: isFree,
+      highlight: true,
+      lockedOn: !isFree ? 'Already on a paid plan' : null,
+    },
+    {
+      id: 'upgrade_pro',
+      icon: '🚀',
+      title: 'Upgrade to Pro',
+      desc: 'Unlimited uploads, AI Pro Reel, 90-day page, and priority support.',
+      price: '₦59,999',
+      priceKobo: 5999900,
+      available: !isPro,
+      highlight: true,
+      lockedOn: isPro ? 'Already on Pro' : null,
+    },
+  ]
+
+  async function purchase(addonId: string, priceKobo: number) {
+    setPurchasing(addonId)
+    try {
+      const res = await fetch(`/api/events/${event.id}/addon`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addonId, priceKobo }),
+      })
+      const data = await res.json()
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl
+      } else {
+        alert(data.error || 'Could not initiate payment.')
+      }
+    } catch {
+      alert('Something went wrong. Please try again.')
+    } finally {
+      setPurchasing(null)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-100 p-5">
+        <h2 className="font-display font-bold text-slate-900 mb-1">Add-ons & Upgrades</h2>
+        <p className="text-sm text-slate-500">
+          Extend this event with extra capacity, features, or a full plan upgrade. All purchases apply to this event only.
+        </p>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-4">
+        {addons.map(addon => {
+          const isLocked = !!addon.lockedOn
+          const isBuying = purchasing === addon.id
+          return (
+            <div key={addon.id} className={`bg-white rounded-2xl border p-5 flex flex-col gap-3 transition-all ${addon.highlight ? 'border-[#14B8A6]/40 shadow-md' : 'border-slate-100'} ${isLocked ? 'opacity-60' : ''}`}>
+              <div className="flex items-start gap-3">
+                <span className="text-2xl flex-shrink-0">{addon.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-sm text-slate-900">{addon.title}</p>
+                    {addon.highlight && !isLocked && (
+                      <span className="text-xs bg-[#14B8A6]/10 text-[#14B8A6] font-bold px-2 py-0.5 rounded-full">Recommended</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">{addon.desc}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-50">
+                <span className="font-display font-black text-base text-slate-900">
+                  {isLocked ? addon.lockedOn : addon.price}
+                </span>
+                {isLocked ? (
+                  <span className="text-xs text-[#14B8A6] font-semibold">✓ Active</span>
+                ) : (
+                  <button
+                    onClick={() => purchase(addon.id, addon.priceKobo)}
+                    disabled={isBuying || !addon.available}
+                    className="text-sm font-bold px-4 py-2 rounded-xl text-white transition-all disabled:opacity-60"
+                    style={{ background: addon.highlight ? 'linear-gradient(135deg,#14B8A6,#1E5AAF)' : '#0A4F6B' }}
+                  >
+                    {isBuying ? 'Loading…' : 'Buy'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <p className="text-xs text-slate-400 text-center">
+        All payments processed securely via Paystack. You&apos;ll be redirected to complete payment.
+      </p>
     </div>
   )
 }

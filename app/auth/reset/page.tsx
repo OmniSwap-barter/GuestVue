@@ -17,9 +17,10 @@ export default function ResetPasswordPage() {
     setError('')
 
     const supabase = createClient()
+    // Route through /auth/callback so PKCE code is exchanged before landing on update-password
     const redirectTo =
       typeof window !== 'undefined'
-        ? `${window.location.origin}/auth/update-password`
+        ? `${window.location.origin}/auth/callback?next=/auth/update-password`
         : undefined
 
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
