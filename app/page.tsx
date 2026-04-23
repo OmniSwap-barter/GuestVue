@@ -105,7 +105,7 @@ export default function HomePage() {
       {/* ══════════════════════════════════════════════════
           HERO
       ══════════════════════════════════════════════════ */}
-      <section className="relative min-h-screen flex items-center bg-hero-mesh bg-grid pt-16">
+      <section className="relative min-h-screen flex items-center pt-16" style={{ background: 'linear-gradient(135deg, #060d1a 0%, #0a1628 30%, #0d2040 60%, #0A4F6B 100%)' }}>
         {/* Animated orbs */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-teal/10 blur-[120px] animate-float pointer-events-none" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-coral/10 blur-[100px] animate-float-slow pointer-events-none" />
@@ -325,7 +325,7 @@ export default function HomePage() {
           </div>
 
           {/* CTA inside features */}
-          <div className="mt-12 rounded-3xl bg-hero-mesh bg-grid p-8 sm:p-12 text-center relative overflow-hidden">
+          <div className="mt-12 rounded-3xl p-8 sm:p-12 text-center relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #060d1a 0%, #0a1628 30%, #0d2040 60%, #0A4F6B 100%)' }}>
             <div className="absolute inset-0 bg-teal/5 blur-xl" />
             <div className="relative">
               <h3 className="font-display font-black text-2xl sm:text-3xl text-white mb-3">Ready to try it?</h3>
@@ -505,7 +505,7 @@ export default function HomePage() {
       {/* ══════════════════════════════════════════════════
           FINAL CTA
       ══════════════════════════════════════════════════ */}
-      <section className="relative py-28 bg-hero-mesh bg-grid overflow-hidden">
+      <section className="relative py-28 overflow-hidden" style={{ background: 'linear-gradient(135deg, #060d1a 0%, #0a1628 30%, #0d2040 60%, #0A4F6B 100%)' }}>
         <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-teal/15 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-coral/10 blur-[100px] pointer-events-none" />
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 text-center">

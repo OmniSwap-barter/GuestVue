@@ -14,6 +14,7 @@ interface Props {
 }
 
 type TabId = 'overview' | 'gallery' | 'slideshow' | 'reel' | 'settings'
+type MediaFilter = 'all' | 'photos' | 'videos'
 
 export default function EventDetailClient({ event, initialUploads }: Props) {
   const router = useRouter()
@@ -21,9 +22,10 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
   const [uploads] = useState<Upload[]>(initialUploads)
   const [copied, setCopied] = useState(false)
 
-  // Gallery selection
+  // Gallery selection & filter
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [isSelecting, setIsSelecting] = useState(false)
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all')
 
   // Slideshow
   const [slideIdx, setSlideIdx] = useState(0)
@@ -42,6 +44,12 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
   const planSupportsReel = event.plan === 'pro'
   const planSupportsBulkDownload = event.plan === 'flex' || event.plan === 'pro'
 
+  // Filtered uploads for gallery
+  const filteredUploads =
+    mediaFilter === 'photos' ? photos :
+    mediaFilter === 'videos' ? videos :
+    uploads
+
   // ─── Clipboard ───────────────────────────────────────────────────────────
   function copyLink() {
     navigator.clipboard.writeText(guestUrl)
@@ -59,7 +67,7 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
   }
 
   function selectAll() {
-    setSelected(new Set(uploads.map(u => u.id)))
+    setSelected(new Set(filteredUploads.map(u => u.id)))
   }
 
   function deselectAll() {
@@ -86,13 +94,25 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
     })
   }
 
-  function downloadAll() {
-    uploads.forEach((u, i) => {
-      setTimeout(() => {
-        const url = u.display_url || u.original_url
-        if (url) downloadFile(url, `${event.name}-${i + 1}.${u.type === 'video' ? 'mp4' : 'jpg'}`)
-      }, i * 300)
-    })
+  async function downloadAll() {
+    try {
+      const res = await fetch(`/api/events/${event.id}/download-zip`)
+      if (!res.ok) throw new Error('Failed')
+      const data = await res.json()
+      ;(data.urls as { url: string; type: string }[]).forEach((item, i) => {
+        setTimeout(() => {
+          downloadFile(item.url, `${event.name}-${i + 1}.${item.type === 'video' ? 'mp4' : 'jpg'}`)
+        }, i * 300)
+      })
+    } catch {
+      // Fall back to direct download
+      uploads.forEach((u, i) => {
+        setTimeout(() => {
+          const url = u.display_url || u.original_url
+          if (url) downloadFile(url, `${event.name}-${i + 1}.${u.type === 'video' ? 'mp4' : 'jpg'}`)
+        }, i * 300)
+      })
+    }
   }
 
   // ─── Slideshow ───────────────────────────────────────────────────────────
@@ -111,14 +131,13 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
   async function generateReel() {
     setReelStatus('generating')
     try {
-      const res = await fetch('/api/reels/generate', {
+      const res = await fetch(`/api/events/${event.id}/generate-reel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: event.id }),
       })
       if (!res.ok) throw new Error('Reel generation failed')
       const data = await res.json()
-      setReelUrl(data.url || null)
+      setReelUrl(data.reel?.output_url || null)
       setReelStatus('done')
     } catch {
       setReelStatus('error')
@@ -282,42 +301,57 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
             </div>
           ) : (
             <>
-              {/* Controls */}
-              <div className="flex flex-wrap items-center gap-2 mb-4">
-                <p className="text-sm text-slate-500 flex-1">{uploads.length} files collected</p>
+              {/* Filter + count row */}
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                  {(['all', 'photos', 'videos'] as MediaFilter[]).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setMediaFilter(f)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-md capitalize transition-all ${
+                        mediaFilter === f ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {f === 'all' ? `All (${uploads.length})` : f === 'photos' ? `Photos (${photos.length})` : `Videos (${videos.length})`}
+                    </button>
+                  ))}
+                </div>
 
-                {isSelecting ? (
-                  <>
-                    <button onClick={selectAll} className="text-xs font-semibold text-[#0A4F6B] border border-[#0A4F6B]/30 px-3 py-1.5 rounded-lg hover:bg-[#0A4F6B]/5 transition-all">
-                      Select all
-                    </button>
-                    <button onClick={deselectAll} className="text-xs font-semibold text-slate-500 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-all">
-                      Deselect all
-                    </button>
-                    {selected.size > 0 && planSupportsBulkDownload && (
-                      <button onClick={downloadSelected} className="text-xs font-bold text-white bg-[#0A4F6B] px-3 py-1.5 rounded-lg hover:bg-[#1E5AAF] transition-all">
-                        Download selected ({selected.size})
-                      </button>
-                    )}
-                    <button onClick={() => { setIsSelecting(false); deselectAll() }} className="text-xs font-semibold text-slate-400 px-3 py-1.5 rounded-lg hover:bg-slate-50">
-                      Cancel
-                    </button>
-                  </>
+                <div className="flex-1" />
+
+                {/* Select All toggle */}
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === filteredUploads.length && filteredUploads.length > 0}
+                    onChange={e => e.target.checked ? selectAll() : deselectAll()}
+                    className="w-4 h-4 rounded accent-[#0A4F6B]"
+                  />
+                  Select all
+                </label>
+
+                {/* Download selected */}
+                {selected.size > 0 && planSupportsBulkDownload && (
+                  <button
+                    onClick={downloadSelected}
+                    className="text-xs font-bold text-white bg-[#0A4F6B] px-3 py-1.5 rounded-lg hover:bg-[#1E5AAF] transition-all"
+                  >
+                    Download selected ({selected.size})
+                  </button>
+                )}
+
+                {/* Download all */}
+                {planSupportsBulkDownload ? (
+                  <button
+                    onClick={downloadAll}
+                    className="text-xs font-semibold text-[#0A4F6B] border border-[#0A4F6B]/30 px-3 py-1.5 rounded-lg hover:bg-[#0A4F6B]/5 transition-all"
+                  >
+                    Download all ({uploads.length})
+                  </button>
                 ) : (
-                  <>
-                    <button onClick={() => setIsSelecting(true)} className="text-xs font-semibold text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-all">
-                      Select
-                    </button>
-                    {planSupportsBulkDownload ? (
-                      <button onClick={downloadAll} className="text-sm font-semibold text-[#0A4F6B] hover:text-[#1E5AAF] transition-colors">
-                        ↓ Download all
-                      </button>
-                    ) : (
-                      <Link href="/pricing" className="text-xs font-semibold text-[#E8735C] hover:underline">
-                        Upgrade for bulk download
-                      </Link>
-                    )}
-                  </>
+                  <Link href="/pricing" className="text-xs font-semibold text-[#E8735C] hover:underline">
+                    Upgrade for bulk download
+                  </Link>
                 )}
               </div>
 
@@ -336,7 +370,7 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
 
               {/* Grid */}
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                {uploads.map(upload => {
+                {filteredUploads.map(upload => {
                   const isSelected = selected.has(upload.id)
                   const url = upload.display_url || upload.original_url
                   return (
@@ -345,7 +379,7 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
                       className={`relative aspect-square rounded-xl overflow-hidden bg-slate-100 cursor-pointer group ${
                         isSelected ? 'ring-2 ring-[#0A4F6B] ring-offset-1' : ''
                       }`}
-                      onClick={() => isSelecting && toggleSelect(upload.id)}
+                      onClick={() => toggleSelect(upload.id)}
                     >
                       {upload.type === 'photo' ? (
                         <img src={url || ''} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
@@ -363,17 +397,16 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
                           <span className="text-white text-xs font-semibold">Processing…</span>
                         </div>
                       )}
-                      {isSelecting && (
-                        <div className={`absolute top-1.5 left-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          isSelected ? 'bg-[#0A4F6B] border-[#0A4F6B]' : 'bg-white/80 border-white'
-                        }`}>
-                          {isSelected && (
-                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </div>
-                      )}
+                      {/* Always show checkbox */}
+                      <div className={`absolute top-1.5 left-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                        isSelected ? 'bg-[#0A4F6B] border-[#0A4F6B]' : 'bg-white/80 border-white opacity-0 group-hover:opacity-100'
+                      }`}>
+                        {isSelected && (
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -387,13 +420,13 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
       {tab === 'slideshow' && (
         <div>
           {!planSupportsSlideshow ? (
-            <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
+            <div className="rounded-2xl p-8 text-center text-white relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #060d1a 0%, #0a1628 50%, #0A4F6B 100%)' }}>
               <div className="text-5xl mb-4">🎞</div>
-              <h2 className="font-bold text-xl text-slate-900 mb-2">Live Slideshow</h2>
-              <p className="text-sm text-slate-500 mb-5 max-w-sm mx-auto">
+              <h2 className="font-bold text-xl text-white mb-2">Live Slideshow</h2>
+              <p className="text-sm text-white/60 mb-5 max-w-sm mx-auto">
                 Display an auto-cycling slideshow of guest photos on a screen at your event. Available on Flex and Pro.
               </p>
-              <Link href="/pricing" className="inline-block bg-[#0A4F6B] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm">
+              <Link href="/pricing" className="inline-block bg-[#14B8A6] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-all text-sm shadow-lg">
                 Upgrade to Flex — ₦24,999 →
               </Link>
             </div>
@@ -403,7 +436,34 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
               <p className="text-slate-400 text-sm">No photos yet. Share your QR code to get started.</p>
             </div>
           ) : (
-            <div>
+            <div className="space-y-4">
+              {/* Open projector mode button */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="flex-1">
+                  <h3 className="font-bold text-slate-900 mb-1">Projector Mode</h3>
+                  <p className="text-sm text-slate-500">Open this on the device connected to your projector or TV for a full-screen live slideshow. New uploads appear automatically in real time.</p>
+                </div>
+                <div className="flex flex-col gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => window.open(`/dashboard/events/${event.id}/slideshow`, '_blank', 'noopener noreferrer')}
+                    className="inline-flex items-center gap-2 bg-[#0A4F6B] text-white font-bold px-5 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm shadow-lg"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>
+                    Open Live Slideshow
+                  </button>
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/dashboard/events/${event.id}/slideshow`
+                      navigator.clipboard.writeText(url)
+                    }}
+                    className="text-xs font-semibold text-slate-500 border border-slate-200 px-3 py-2 rounded-xl hover:bg-slate-50 transition-all text-center"
+                  >
+                    Copy slideshow link
+                  </button>
+                </div>
+              </div>
+
+              {/* Preview */}
               <div className="bg-black rounded-2xl overflow-hidden aspect-video relative">
                 <img
                   key={slideIdx}
@@ -429,7 +489,7 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-slate-400 text-center mt-3">Slides change every 3 seconds automatically.</p>
+              <p className="text-xs text-slate-400 text-center">Preview — slides change every 3 seconds. The projector window auto-refreshes with new uploads.</p>
             </div>
           )}
         </div>
@@ -448,9 +508,10 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
 
           {!planSupportsReel ? (
             <div className="text-center">
-              <div className="bg-[#0A4F6B]/5 border border-[#0A4F6B]/20 rounded-2xl p-5 mb-5 max-w-sm mx-auto">
-                <p className="text-sm font-semibold text-slate-800 mb-1">Upgrade to Pro to unlock AI Reel</p>
-                <p className="text-xs text-slate-500">Pro plan includes a basic AI reel from your guest photos.</p>
+              <div className="rounded-2xl p-6 mb-5 max-w-sm mx-auto text-white relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #14B8A6 0%, #1E5AAF 50%, #E8735C 100%)' }}>
+                <p className="text-lg font-bold mb-2">Upgrade to Pro</p>
+                <p className="text-sm text-white/80 mb-1">Get an AI-generated highlight reel from your guest photos.</p>
+                <p className="text-xs text-white/60">Share-ready for Instagram Reels and TikTok.</p>
               </div>
               <Link href="/pricing" className="inline-block bg-[#0A4F6B] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm">
                 Upgrade to Pro — ₦49,999 →
@@ -474,17 +535,21 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
                   <p className="text-xs text-slate-400 mt-1">This may take a few minutes.</p>
                 </div>
               )}
-              {reelStatus === 'done' && reelUrl && (
+              {reelStatus === 'done' && (
                 <div>
                   <div className="text-4xl mb-3">✅</div>
-                  <p className="font-semibold text-slate-900 mb-4">Your reel is ready!</p>
-                  <a
-                    href={reelUrl}
-                    download={`${event.name}-reel.mp4`}
-                    className="inline-block bg-[#14B8A6] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-all text-sm"
-                  >
-                    ↓ Download Reel
-                  </a>
+                  <p className="font-semibold text-slate-900 mb-4">Your reel has been queued!</p>
+                  {reelUrl ? (
+                    <a
+                      href={reelUrl}
+                      download={`${event.name}-reel.mp4`}
+                      className="inline-block bg-[#14B8A6] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-all text-sm"
+                    >
+                      ↓ Download Reel
+                    </a>
+                  ) : (
+                    <p className="text-xs text-slate-400">Processing in the background — come back shortly to download.</p>
+                  )}
                 </div>
               )}
               {reelStatus === 'error' && (
