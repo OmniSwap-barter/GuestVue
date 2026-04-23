@@ -5,10 +5,13 @@ import EventDetailClient from './EventDetailClient'
 
 interface Props {
   params: Promise<{ eventId: string }>
+  searchParams: Promise<{ payment?: string }>
 }
 
-export default async function EventDetailPage({ params }: Props) {
+export default async function EventDetailPage({ params, searchParams }: Props) {
   const { eventId } = await params
+  const { payment } = await searchParams
+  const paymentSuccess = payment === 'success'
   const supabase = await createServerClient_server()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -51,6 +54,20 @@ export default async function EventDetailPage({ params }: Props) {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
+        {paymentSuccess && (
+          <div className="mb-6 rounded-2xl p-5 text-white relative overflow-hidden"
+            style={{ background: 'linear-gradient(135deg, #14B8A6 0%, #1E5AAF 60%, #0A4F6B 100%)' }}>
+            <div className="flex items-start gap-4">
+              <div className="text-3xl flex-shrink-0">🎉</div>
+              <div>
+                <p className="font-display font-bold text-lg">Payment confirmed — your event is live!</p>
+                <p className="text-white/80 text-sm mt-1">
+                  Share the QR code with your guests. Every photo and video they upload will appear here in real time.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <EventDetailClient event={event} initialUploads={uploads ?? []} />
       </main>
     </div>

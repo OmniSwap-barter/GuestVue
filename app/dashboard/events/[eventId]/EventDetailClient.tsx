@@ -232,11 +232,21 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
                     {copied ? '✓ Copied!' : 'Copy'}
                   </button>
                 </div>
-                {event.qr_url && (
-                  <a href={event.qr_url} download={`${event.name}-QR.png`} className="text-sm text-slate-500 hover:text-slate-700 underline">
-                    Download QR PNG
-                  </a>
-                )}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {event.qr_url && (
+                    <a href={event.qr_url} download={`${event.name}-QR.png`} className="text-sm text-slate-500 hover:text-slate-700 underline">
+                      Download QR PNG
+                    </a>
+                  )}
+                  <Link href={`/dashboard/events/${event.id}/qr`}
+                    className="text-sm font-semibold text-[#14B8A6] hover:text-[#0d9488]">
+                    🎨 Customize QR Card →
+                  </Link>
+                  <Link href={`/dashboard/events/${event.id}/invitations`}
+                    className="text-sm font-semibold text-[#1E5AAF] hover:text-[#1d4ed8]">
+                    💌 Design Invitation →
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

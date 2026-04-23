@@ -44,7 +44,12 @@ export default function CreateEventForm({ userId, planType }: Props) {
       return
     }
 
-    router.push(`/dashboard/events/${body.event.id}`)
+    // Paid plans → redirect to Paystack checkout
+    if (body.paymentUrl) {
+      window.location.href = body.paymentUrl
+    } else {
+      router.push(`/dashboard/events/${body.event.id}`)
+    }
   }
 
   const planOptions: { id: EventPlan; label: string; price: string; uploads: string; highlight?: boolean }[] = [
