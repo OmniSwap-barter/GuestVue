@@ -115,6 +115,26 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
     }
   }
 
+  // ─── Pay Now ─────────────────────────────────────────────────────────────
+  const [payingNow, setPayingNow] = useState(false)
+
+  async function handlePayNow() {
+    setPayingNow(true)
+    try {
+      const res = await fetch(`/api/events/${event.id}/pay`, { method: 'POST' })
+      const data = await res.json()
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl
+      } else {
+        alert(data.error || 'Could not initiate payment. Please try again.')
+        setPayingNow(false)
+      }
+    } catch {
+      alert('Something went wrong. Please try again.')
+      setPayingNow(false)
+    }
+  }
+
   // ─── Slideshow ───────────────────────────────────────────────────────────
   const slideshowImages = photos.filter(u => u.display_url || u.original_url)
 
@@ -191,8 +211,12 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
             <p className="font-semibold text-[#E8735C] text-sm">Payment required to activate</p>
             <p className="text-xs text-slate-500 mt-0.5">Guests can&apos;t upload yet. Complete payment to go live.</p>
           </div>
-          <button className="bg-[#E8735C] text-white text-sm font-bold px-4 py-2 rounded-xl hover:opacity-90 transition-all flex-shrink-0">
-            Pay Now
+          <button
+            onClick={handlePayNow}
+            disabled={payingNow}
+            className="bg-[#E8735C] text-white text-sm font-bold px-4 py-2 rounded-xl hover:opacity-90 disabled:opacity-60 transition-all flex-shrink-0"
+          >
+            {payingNow ? 'Redirecting…' : 'Pay Now'}
           </button>
         </div>
       )}
