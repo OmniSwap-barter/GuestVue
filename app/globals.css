@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --ocean: #0A4F6B;
+    --cobalt: #1E5AAF;
+    --coral: #E8735C;
+    --teal: #14B8A6;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply font-body text-midnight-900 bg-cloud antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  .text-gradient-brand {
+    background: linear-gradient(135deg, #0A4F6B, #1E5AAF, #E8735C);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-gradient-brand {
+    background: linear-gradient(135deg, #0A4F6B 0%, #1E5AAF 50%, #E8735C 100%);
+  }
+
+  .shadow-brand {
+    box-shadow: 0 8px 24px rgba(10, 79, 107, 0.25);
+  }
+
+  .shadow-coral {
+    box-shadow: 0 8px 24px rgba(232, 115, 92, 0.25);
+  }
+}

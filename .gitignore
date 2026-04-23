@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+worker/node_modules
+
+# Environment (NEVER commit this)
+.env.local
+.env*.local
+
+# Next.js build output
+.next
+out
+
+# Worker build
+worker/dist
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
