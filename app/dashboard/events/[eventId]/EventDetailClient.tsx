@@ -13,7 +13,7 @@ interface Props {
   initialUploads: Upload[]
 }
 
-type TabId = 'overview' | 'gallery' | 'slideshow' | 'reel' | 'settings'
+type TabId = 'overview' | 'gallery' | 'slideshow' | 'reel' | 'embed' | 'settings'
 type MediaFilter = 'all' | 'photos' | 'videos'
 
 export default function EventDetailClient({ event, initialUploads }: Props) {
@@ -149,6 +149,7 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
     { id: 'gallery', label: `Gallery (${uploads.length})` },
     { id: 'slideshow', label: 'Slideshow' },
     { id: 'reel', label: 'AI Reel' },
+    { id: 'embed', label: 'Photo Wall' },
     { id: 'settings', label: 'Settings' },
   ]
 
@@ -563,6 +564,73 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
         </div>
       )}
 
+      {/* ── PHOTO WALL / EMBED ───────────────────────────────────────────── */}
+      {tab === 'embed' && (
+        <div className="space-y-4">
+          {/* Live photo wall card */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#14B8A6]/10 flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-[#14B8A6]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-bold text-slate-900 mb-1">Live Photo Wall</h2>
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  A real-time full-screen display of all guest photos — perfect for projecting at your venue or embedding on your website. New uploads appear automatically.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => window.open(`/e/${event.id}/wall`, '_blank', 'noopener noreferrer')}
+                className="flex items-center justify-center gap-2 bg-[#14B8A6] text-white font-bold px-5 py-3 rounded-xl hover:opacity-90 transition-all text-sm shadow-md"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                </svg>
+                Open Live Photo Wall
+              </button>
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/e/${event.id}/wall`
+                  navigator.clipboard.writeText(url)
+                }}
+                className="flex items-center justify-center gap-2 text-sm font-semibold text-slate-600 border border-slate-200 px-4 py-3 rounded-xl hover:bg-slate-50 transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Copy wall link
+              </button>
+            </div>
+          </div>
+
+          {/* Website embed code */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
+            <h3 className="font-bold text-slate-900 mb-1">Embed on your website</h3>
+            <p className="text-sm text-slate-500 mb-4">
+              Paste this code into your website to show a live photo wall that updates in real time as guests upload.
+            </p>
+
+            {/* Embed code */}
+            <EmbedCodeBlock eventId={event.id} eventName={event.name} />
+          </div>
+
+          {/* QR code embed hint */}
+          <div className="bg-[#0A4F6B]/5 border border-[#0A4F6B]/15 rounded-2xl p-4 flex items-start gap-3">
+            <svg className="w-5 h-5 text-[#0A4F6B] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+            </svg>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              <strong className="text-slate-800">Tip:</strong> Display the photo wall on a TV or projector, then put the QR code next to it so guests can scan and see their photo appear in real time.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── SETTINGS ─────────────────────────────────────────────────────── */}
       {tab === 'settings' && (
         <div className="space-y-4">
@@ -585,6 +653,46 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Embed code block sub-component ──────────────────────────────────────────
+function EmbedCodeBlock({ eventId, eventName }: { eventId: string; eventName: string }) {
+  const [copied, setCopied] = useState(false)
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://guestvue.com'
+  const wallUrl = `${origin}/e/${eventId}/wall`
+
+  const embedCode = `<iframe
+  src="${wallUrl}"
+  title="${eventName} Live Photo Wall"
+  width="100%"
+  height="600"
+  style="border:none;border-radius:16px;overflow:hidden;"
+  allow="autoplay"
+></iframe>`
+
+  function copy() {
+    navigator.clipboard.writeText(embedCode)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="relative">
+      <pre className="bg-slate-900 text-slate-300 rounded-xl px-4 py-4 text-xs overflow-x-auto leading-relaxed font-mono whitespace-pre-wrap break-all">
+        {embedCode}
+      </pre>
+      <button
+        onClick={copy}
+        className={`absolute top-3 right-3 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+          copied
+            ? 'bg-[#14B8A6] text-white'
+            : 'bg-white/10 text-slate-300 hover:bg-white/20'
+        }`}
+      >
+        {copied ? '✓ Copied!' : 'Copy'}
+      </button>
     </div>
   )
 }
