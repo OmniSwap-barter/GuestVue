@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       .from('profiles')
       .select('*')
       .eq('id', user.id)
-      .single()
+      .single() as { data: Record<string, any> | null, error: any }
 
     if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     if (profile.referral_code) return NextResponse.json({ error: 'Already an affiliate' }, { status: 400 })
