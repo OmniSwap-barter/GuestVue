@@ -7,8 +7,8 @@ export const PLANS = {
     name: 'Free',
     price: 0,
     priceKobo: 0,
-    uploads: 50,
-    storageDays: 7,
+    uploads: 30,
+    storageDays: 1,
     activePageHours: 24,
     bulkDownload: false,
     basicReel: false,
@@ -22,61 +22,97 @@ export const PLANS = {
     name: 'Flex',
     price: 24999,
     priceKobo: 2499900,
-    uploads: 500,
-    storageDays: 60,
+    uploads: 300,
+    storageDays: 7,
+    activePageDays: 7,
+    bulkDownload: true,
+    basicReel: false,
+    advancedReel: false,
+    slideshow: true,
+    contentModeration: false,
+    paystackPlanCode: 'PLN_flex_guestvue',
+  },
+  pro: {
+    id: 'pro',
+    name: 'Pro',
+    price: 49999,
+    priceKobo: 4999900,
+    uploads: 1000,
+    storageDays: 30,
     activePageDays: 30,
     bulkDownload: true,
     basicReel: true,
     advancedReel: false,
     slideshow: true,
     contentModeration: false,
-    paystackPlanCode: 'PLN_flex_guestvue', // set after creating plan in Paystack
-  },
-  pro: {
-    id: 'pro',
-    name: 'Pro',
-    price: 59999,
-    priceKobo: 5999900,
-    uploads: Infinity,
-    storageDays: 120,
-    activePageDays: 90,
-    bulkDownload: true,
-    basicReel: true,
-    advancedReel: true,
-    slideshow: true,
-    contentModeration: true,
     paystackPlanCode: 'PLN_pro_guestvue',
   },
 } as const
 
 export const BUSINESS_PLANS = {
-  activation: {
-    id: 'activation',
-    name: 'Activation',
-    price: 99999,
-    priceKobo: 9999900,
-    uploadsPerMonth: 2000,
-    basicReel: true,
+  activation_starter: {
+    id: 'activation_starter',
+    name: 'Activation Starter',
+    price: 53997,
+    priceKobo: 5399700,
+    events: 1,
+    uploadsPerEvent: 500,
+    basicReel: false,
     advancedReel: false,
-    paystackPlanCode: 'PLN_activation_guestvue',
+    paystackPlanCode: 'PLN_activation_starter_guestvue',
   },
   tycoon: {
     id: 'tycoon',
     name: 'Tycoon',
-    price: 149999,
-    priceKobo: 14999900,
-    uploadsPerMonth: Infinity,
-    basicReel: true,
+    price: 89995,
+    priceKobo: 8999500,
+    events: 3,
+    uploadsPerEvent: 2000,
+    basicReel: false,
     advancedReel: true,
     paystackPlanCode: 'PLN_tycoon_guestvue',
   },
 } as const
 
+// Vendor / Professional packages — one-time bundle for planners, photographers, agencies
 export const PLANNER_PLANS = {
-  starter:  { id: 'starter',  name: 'Starter',           price: 99999,  priceKobo: 9999900,  activeEvents: 3,  paystackPlanCode: 'PLN_starter_guestvue' },
-  growth:   { id: 'growth',   name: 'Growth',             price: 149999, priceKobo: 14999900, activeEvents: 5,  paystackPlanCode: 'PLN_growth_guestvue' },
-  scale:    { id: 'scale',    name: 'Scale',              price: 249999, priceKobo: 24999900, activeEvents: 10, paystackPlanCode: 'PLN_scale_guestvue' },
-  jagaban:  { id: 'jagaban',  name: 'Industry Jagaban',   price: 349999, priceKobo: 34999900, activeEvents: 20, paystackPlanCode: 'PLN_jagaban_guestvue' },
+  starter: {
+    id: 'starter',
+    name: 'Starter',
+    price: 53997,
+    priceKobo: 5399700,
+    activeEvents: 2,
+    uploadsPerEvent: 300,
+    paystackPlanCode: 'PLN_vendor_starter_guestvue',
+  },
+  growth: {
+    id: 'growth',
+    name: 'Growth',
+    price: 94999,
+    priceKobo: 9499900,
+    activeEvents: 5,
+    uploadsPerEvent: 600,
+    paystackPlanCode: 'PLN_vendor_growth_guestvue',
+  },
+  scale: {
+    id: 'scale',
+    name: 'Scale',
+    price: 179999,
+    priceKobo: 17999900,
+    activeEvents: 12,
+    uploadsPerEvent: 1500,
+    paystackPlanCode: 'PLN_vendor_scale_guestvue',
+  },
+  jagaban: {
+    id: 'jagaban',
+    name: 'Jagaban',
+    price: 350000,
+    priceKobo: 35000000,
+    activeEvents: -1, // unlimited
+    uploadsPerEvent: -1, // unlimited
+    storageMonths: 12,
+    paystackPlanCode: 'PLN_vendor_jagaban_guestvue',
+  },
 } as const
 
 export const ADDONS = {
@@ -91,13 +127,13 @@ export const ADDONS = {
 
 export const WHOLESALE = {
   flex: { price: 17999, priceKobo: 1799900, retailPrice: 24999, margin: 7000 },
-  pro:  { price: 44999, priceKobo: 4499900, retailPrice: 59999, margin: 15000 },
+  pro:  { price: 34999, priceKobo: 3499900, retailPrice: 49999, margin: 15000 },
 } as const
 
 export const AFFILIATE = {
   standardRate: 0.20,
   loyaltyRate: 0.25,
-  loyaltyThreshold: 15, // referrals to unlock 25%
+  loyaltyThreshold: 15,
   wholesaleDiscountAfterThreshold: 0.05,
   payoutMinimum: 5000,
   cookieDays: 30,

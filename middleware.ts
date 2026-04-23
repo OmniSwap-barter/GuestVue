@@ -9,6 +9,10 @@ const PUBLIC_ROUTES = [
   '/auth/callback',
   '/pricing',
   '/about',
+  '/faq',
+  '/terms',
+  '/privacy',
+  '/contact',
   '/affiliate',
 ]
 

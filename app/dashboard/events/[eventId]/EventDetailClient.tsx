@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import type { Database } from '@/types/database'
 
 type Event = Database['public']['Tables']['events']['Row']
@@ -12,87 +13,178 @@ interface Props {
   initialUploads: Upload[]
 }
 
+type TabId = 'overview' | 'gallery' | 'slideshow' | 'reel' | 'settings'
+
 export default function EventDetailClient({ event, initialUploads }: Props) {
   const router = useRouter()
-  const [tab, setTab] = useState<'overview' | 'gallery' | 'reel' | 'settings'>('overview')
+  const [tab, setTab] = useState<TabId>('overview')
   const [uploads] = useState<Upload[]>(initialUploads)
   const [copied, setCopied] = useState(false)
 
-  const guestUrl = event.gallery_url || `${window?.location?.origin}/e/${event.id}`
-  const pct = Math.round((event.upload_count / event.upload_limit) * 100)
+  // Gallery selection
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [isSelecting, setIsSelecting] = useState(false)
 
+  // Slideshow
+  const [slideIdx, setSlideIdx] = useState(0)
+  const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Reel
+  const [reelStatus, setReelStatus] = useState<'idle' | 'generating' | 'done' | 'error'>('idle')
+  const [reelUrl, setReelUrl] = useState<string | null>(null)
+
+  const guestUrl = event.gallery_url || `${typeof window !== 'undefined' ? window.location.origin : ''}/e/${event.id}`
+  const pct = Math.round((event.upload_count / event.upload_limit) * 100)
+  const photos = uploads.filter(u => u.type === 'photo')
+  const videos = uploads.filter(u => u.type === 'video')
+
+  const planSupportsSlideshow = event.plan === 'flex' || event.plan === 'pro'
+  const planSupportsReel = event.plan === 'pro'
+  const planSupportsBulkDownload = event.plan === 'flex' || event.plan === 'pro'
+
+  // ─── Clipboard ───────────────────────────────────────────────────────────
   function copyLink() {
     navigator.clipboard.writeText(guestUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const photos = uploads.filter(u => u.type === 'photo')
-  const videos = uploads.filter(u => u.type === 'video')
+  // ─── Gallery selection ───────────────────────────────────────────────────
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelected(new Set(uploads.map(u => u.id)))
+  }
+
+  function deselectAll() {
+    setSelected(new Set())
+  }
+
+  // ─── Download helpers ────────────────────────────────────────────────────
+  function downloadFile(url: string, filename: string) {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    a.click()
+  }
+
+  function downloadSelected() {
+    const toDownload = uploads.filter(u => selected.has(u.id))
+    toDownload.forEach((u, i) => {
+      setTimeout(() => {
+        const url = u.display_url || u.original_url
+        if (url) downloadFile(url, `${event.name}-${i + 1}.${u.type === 'video' ? 'mp4' : 'jpg'}`)
+      }, i * 300)
+    })
+  }
+
+  function downloadAll() {
+    uploads.forEach((u, i) => {
+      setTimeout(() => {
+        const url = u.display_url || u.original_url
+        if (url) downloadFile(url, `${event.name}-${i + 1}.${u.type === 'video' ? 'mp4' : 'jpg'}`)
+      }, i * 300)
+    })
+  }
+
+  // ─── Slideshow ───────────────────────────────────────────────────────────
+  const slideshowImages = photos.filter(u => u.display_url || u.original_url)
+
+  useEffect(() => {
+    if (tab === 'slideshow' && planSupportsSlideshow && slideshowImages.length > 1) {
+      slideTimer.current = setInterval(() => {
+        setSlideIdx(prev => (prev + 1) % slideshowImages.length)
+      }, 3000)
+    }
+    return () => { if (slideTimer.current) clearInterval(slideTimer.current) }
+  }, [tab, slideshowImages.length, planSupportsSlideshow])
+
+  // ─── AI Reel ─────────────────────────────────────────────────────────────
+  async function generateReel() {
+    setReelStatus('generating')
+    try {
+      const res = await fetch('/api/reels/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: event.id }),
+      })
+      if (!res.ok) throw new Error('Reel generation failed')
+      const data = await res.json()
+      setReelUrl(data.url || null)
+      setReelStatus('done')
+    } catch {
+      setReelStatus('error')
+    }
+  }
+
+  const tabs: { id: TabId; label: string }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'gallery', label: `Gallery (${uploads.length})` },
+    { id: 'slideshow', label: 'Slideshow' },
+    { id: 'reel', label: 'AI Reel' },
+    { id: 'settings', label: 'Settings' },
+  ]
 
   return (
     <div>
       {/* Event header */}
       <div className="mb-6">
         <div className="flex items-start gap-3 mb-1">
-          <div className={`w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ${
-            event.status === 'active' ? 'bg-teal animate-pulse' :
-            event.status === 'paused' ? 'bg-coral' : 'bg-midnight-200'
+          <div className={`w-3 h-3 rounded-full mt-2 flex-shrink-0 ${
+            event.status === 'active' ? 'bg-[#14B8A6] animate-pulse' :
+            event.status === 'paused' ? 'bg-[#E8735C]' : 'bg-slate-200'
           }`} />
           <div>
-            <h1 className="font-display font-bold text-2xl text-midnight-900">{event.name}</h1>
-            {event.hashtag && (
-              <p className="text-midnight-400 text-sm mt-0.5">#{event.hashtag}</p>
-            )}
+            <h1 className="font-bold text-2xl text-slate-900">{event.name}</h1>
+            {event.hashtag && <p className="text-slate-400 text-sm mt-0.5">#{event.hashtag}</p>}
           </div>
         </div>
         <div className="flex items-center gap-2 ml-6">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
-            event.plan === 'pro' ? 'bg-ocean/10 text-ocean' :
-            event.plan === 'flex' ? 'bg-cobalt/10 text-cobalt' :
-            'bg-midnight-100 text-midnight-500'
-          }`}>
-            {event.plan.toUpperCase()}
-          </span>
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-md uppercase ${
+            event.plan === 'pro' ? 'bg-[#0A4F6B]/10 text-[#0A4F6B]' :
+            event.plan === 'flex' ? 'bg-[#1E5AAF]/10 text-[#1E5AAF]' :
+            'bg-slate-100 text-slate-500'
+          }`}>{event.plan}</span>
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-md capitalize ${
-            event.status === 'active' ? 'bg-teal/10 text-teal' :
-            event.status === 'paused' ? 'bg-coral/10 text-coral' :
-            'bg-midnight-100 text-midnight-500'
-          }`}>
-            {event.status}
-          </span>
+            event.status === 'active' ? 'bg-[#14B8A6]/10 text-[#14B8A6]' :
+            event.status === 'paused' ? 'bg-[#E8735C]/10 text-[#E8735C]' :
+            'bg-slate-100 text-slate-400'
+          }`}>{event.status}</span>
         </div>
       </div>
 
       {/* Paused warning */}
       {event.status === 'paused' && (
-        <div className="bg-coral/10 border border-coral/20 rounded-2xl p-4 mb-6 flex items-center gap-3">
-          <span className="text-2xl">⚠️</span>
-          <div>
-            <p className="font-semibold text-coral text-sm">Payment required to activate</p>
-            <p className="text-xs text-midnight-500 mt-0.5">
-              Guests can&apos;t upload yet. Complete payment to activate this event.
-            </p>
+        <div className="bg-[#E8735C]/10 border border-[#E8735C]/20 rounded-2xl p-4 mb-6 flex items-center gap-3">
+          <svg className="w-6 h-6 text-[#E8735C] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div className="flex-1">
+            <p className="font-semibold text-[#E8735C] text-sm">Payment required to activate</p>
+            <p className="text-xs text-slate-500 mt-0.5">Guests can&apos;t upload yet. Complete payment to go live.</p>
           </div>
-          <button className="ml-auto bg-coral text-white text-sm font-bold px-4 py-2 rounded-xl hover:opacity-90 transition-all">
+          <button className="bg-[#E8735C] text-white text-sm font-bold px-4 py-2 rounded-xl hover:opacity-90 transition-all flex-shrink-0">
             Pay Now
           </button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-midnight-100 rounded-xl p-1 mb-6">
-        {([
-          { id: 'overview', label: 'Overview' },
-          { id: 'gallery', label: `Gallery (${uploads.length})` },
-          { id: 'reel', label: 'AI Reel' },
-          { id: 'settings', label: 'Settings' },
-        ] as { id: typeof tab; label: string }[]).map(t => (
+      <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-6 overflow-x-auto scrollbar-none">
+        {tabs.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
-              tab === t.id ? 'bg-white text-midnight-900 shadow-sm' : 'text-midnight-500 hover:text-midnight-700'
+            className={`flex-shrink-0 px-3 py-2 text-sm font-semibold rounded-lg transition-all ${
+              tab === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             {t.label}
@@ -100,48 +192,31 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
         ))}
       </div>
 
-      {/* ── OVERVIEW TAB ─────────────────────────────────────────────────────── */}
+      {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
       {tab === 'overview' && (
         <div className="space-y-4">
-          {/* QR Code card */}
-          <div className="bg-white rounded-2xl border border-midnight-100 p-6">
-            <h2 className="font-display font-bold text-midnight-900 mb-4">Your QR Code</h2>
+          {/* QR card */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-6">
+            <h2 className="font-bold text-slate-900 mb-4">Your QR Code</h2>
             <div className="flex flex-col sm:flex-row gap-6 items-start">
-              <div className="w-40 h-40 bg-midnight-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-midnight-100">
-                {event.qr_url ? (
-                  <img src={event.qr_url} alt="QR Code" className="w-36 h-36 object-contain" />
-                ) : (
-                  <span className="text-midnight-300 text-sm text-center px-3">QR generating…</span>
-                )}
+              <div className="w-40 h-40 bg-slate-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-slate-100">
+                {event.qr_url
+                  ? <img src={event.qr_url} alt="QR Code" className="w-36 h-36 object-contain" />
+                  : <span className="text-slate-300 text-sm text-center px-3">QR generating…</span>}
               </div>
               <div className="flex-1">
-                <p className="text-sm text-midnight-500 mb-3">
-                  Share this link or print the QR code. Guests scan it to upload their photos — no app needed.
-                </p>
+                <p className="text-sm text-slate-500 mb-3">Share this link or print the QR. Guests scan to upload — no app needed.</p>
                 <div className="flex gap-2 mb-4">
-                  <input
-                    readOnly
-                    value={guestUrl}
-                    className="flex-1 px-3 py-2 text-sm bg-midnight-50 border border-midnight-100 rounded-xl text-midnight-700 font-mono truncate"
-                  />
-                  <button
-                    onClick={copyLink}
-                    className="px-4 py-2 bg-ocean text-white text-sm font-bold rounded-xl hover:bg-ocean-600 transition-all flex-shrink-0"
-                  >
+                  <input readOnly value={guestUrl} className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-100 rounded-xl text-slate-700 font-mono truncate" />
+                  <button onClick={copyLink} className="px-4 py-2 bg-[#0A4F6B] text-white text-sm font-bold rounded-xl hover:bg-[#1E5AAF] transition-all flex-shrink-0">
                     {copied ? '✓ Copied!' : 'Copy'}
                   </button>
                 </div>
-                <div className="flex gap-2">
-                  {event.qr_url && (
-                    <a
-                      href={event.qr_url}
-                      download={`${event.name}-QR.png`}
-                      className="text-sm text-midnight-500 hover:text-midnight-700 underline"
-                    >
-                      Download QR PNG
-                    </a>
-                  )}
-                </div>
+                {event.qr_url && (
+                  <a href={event.qr_url} download={`${event.name}-QR.png`} className="text-sm text-slate-500 hover:text-slate-700 underline">
+                    Download QR PNG
+                  </a>
+                )}
               </div>
             </div>
           </div>
@@ -151,56 +226,44 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
             {[
               { label: 'Photos', value: photos.length, icon: '📸' },
               { label: 'Videos', value: videos.length, icon: '🎬' },
-              { label: 'Uploads Used', value: `${event.upload_count}/${event.upload_limit}`, icon: '📊' },
+              { label: 'Uploads used', value: `${event.upload_count}/${event.upload_limit}`, icon: '📊' },
               { label: 'Capacity', value: `${pct}%`, icon: '💾' },
             ].map(s => (
-              <div key={s.label} className="bg-white rounded-2xl border border-midnight-100 p-4">
+              <div key={s.label} className="bg-white rounded-2xl border border-slate-100 p-4">
                 <div className="text-2xl mb-1">{s.icon}</div>
-                <p className="font-display font-bold text-lg text-midnight-900">{s.value}</p>
-                <p className="text-xs text-midnight-400">{s.label}</p>
+                <p className="font-bold text-lg text-slate-900">{s.value}</p>
+                <p className="text-xs text-slate-400">{s.label}</p>
               </div>
             ))}
           </div>
 
           {/* Capacity bar */}
-          <div className="bg-white rounded-2xl border border-midnight-100 p-5">
-            <div className="flex justify-between text-sm text-midnight-500 mb-2">
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
+            <div className="flex justify-between text-sm text-slate-500 mb-2">
               <span>Upload capacity</span>
               <span>{event.upload_count.toLocaleString()} / {event.upload_limit === 999999 ? '∞' : event.upload_limit.toLocaleString()}</span>
             </div>
-            <div className="h-2 bg-midnight-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-coral' : 'bg-ocean'}`}
-                style={{ width: `${Math.min(pct, 100)}%` }}
-              />
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-[#E8735C]' : 'bg-[#0A4F6B]'}`}
+                style={{ width: `${Math.min(pct, 100)}%` }} />
             </div>
-            {pct > 80 && (
-              <p className="text-xs text-coral mt-2">Running low — consider upgrading to avoid missing memories.</p>
-            )}
+            {pct > 80 && <p className="text-xs text-[#E8735C] mt-2">Running low — consider upgrading to avoid missing memories.</p>}
           </div>
 
-          {/* Expiry info */}
+          {/* Expiry */}
           {(event.page_expires_at || event.storage_expires_at) && (
-            <div className="bg-white rounded-2xl border border-midnight-100 p-5 space-y-2">
-              <h3 className="font-semibold text-midnight-900 text-sm">Expiry dates</h3>
+            <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-2">
+              <h3 className="font-semibold text-slate-900 text-sm">Expiry dates</h3>
               {event.page_expires_at && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-midnight-500">Guest upload page closes</span>
-                  <span className="font-medium text-midnight-700">
-                    {new Date(event.page_expires_at).toLocaleDateString('en-NG', {
-                      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                    })}
-                  </span>
+                  <span className="text-slate-500">Guest upload page closes</span>
+                  <span className="font-medium text-slate-700">{new Date(event.page_expires_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               )}
               {event.storage_expires_at && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-midnight-500">Files deleted</span>
-                  <span className="font-medium text-midnight-700">
-                    {new Date(event.storage_expires_at).toLocaleDateString('en-NG', {
-                      day: 'numeric', month: 'short', year: 'numeric'
-                    })}
-                  </span>
+                  <span className="text-slate-500">Files deleted after</span>
+                  <span className="font-medium text-slate-700">{new Date(event.storage_expires_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 </div>
               )}
             </div>
@@ -208,99 +271,251 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
         </div>
       )}
 
-      {/* ── GALLERY TAB ──────────────────────────────────────────────────────── */}
+      {/* ── GALLERY ──────────────────────────────────────────────────────── */}
       {tab === 'gallery' && (
         <div>
           {uploads.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-midnight-100 py-16 text-center">
+            <div className="bg-white rounded-2xl border border-slate-100 py-16 text-center">
               <div className="text-5xl mb-3">📭</div>
-              <h3 className="font-display font-bold text-midnight-900 mb-1">No uploads yet</h3>
-              <p className="text-sm text-midnight-400">Share your QR code to start collecting memories.</p>
+              <h3 className="font-bold text-slate-900 mb-1">No uploads yet</h3>
+              <p className="text-sm text-slate-400">Share your QR code to start collecting memories.</p>
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-midnight-500">{uploads.length} files collected</p>
-                <button className="text-sm text-ocean font-semibold hover:text-cobalt">
-                  ↓ Download All
-                </button>
-              </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                {uploads.map(upload => (
-                  <div key={upload.id} className="relative aspect-square rounded-xl overflow-hidden bg-midnight-100 group cursor-pointer">
-                    {upload.type === 'photo' ? (
-                      <img
-                        src={upload.display_url || upload.original_url}
-                        alt=""
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        loading="lazy"
-                      />
+              {/* Controls */}
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <p className="text-sm text-slate-500 flex-1">{uploads.length} files collected</p>
+
+                {isSelecting ? (
+                  <>
+                    <button onClick={selectAll} className="text-xs font-semibold text-[#0A4F6B] border border-[#0A4F6B]/30 px-3 py-1.5 rounded-lg hover:bg-[#0A4F6B]/5 transition-all">
+                      Select all
+                    </button>
+                    <button onClick={deselectAll} className="text-xs font-semibold text-slate-500 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-all">
+                      Deselect all
+                    </button>
+                    {selected.size > 0 && planSupportsBulkDownload && (
+                      <button onClick={downloadSelected} className="text-xs font-bold text-white bg-[#0A4F6B] px-3 py-1.5 rounded-lg hover:bg-[#1E5AAF] transition-all">
+                        Download selected ({selected.size})
+                      </button>
+                    )}
+                    <button onClick={() => { setIsSelecting(false); deselectAll() }} className="text-xs font-semibold text-slate-400 px-3 py-1.5 rounded-lg hover:bg-slate-50">
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setIsSelecting(true)} className="text-xs font-semibold text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-all">
+                      Select
+                    </button>
+                    {planSupportsBulkDownload ? (
+                      <button onClick={downloadAll} className="text-sm font-semibold text-[#0A4F6B] hover:text-[#1E5AAF] transition-colors">
+                        ↓ Download all
+                      </button>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-midnight-800">
-                        <span className="text-3xl">🎬</span>
-                      </div>
+                      <Link href="/pricing" className="text-xs font-semibold text-[#E8735C] hover:underline">
+                        Upgrade for bulk download
+                      </Link>
                     )}
-                    {upload.status === 'processing' && (
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <span className="text-white text-xs font-semibold">Processing…</span>
-                      </div>
-                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Free plan upsell */}
+              {event.plan === 'free' && (
+                <div className="bg-[#0A4F6B]/5 border border-[#0A4F6B]/20 rounded-2xl p-4 mb-4 flex items-center gap-3">
+                  <div className="flex-1">
+                    <p className="font-semibold text-[#0A4F6B] text-sm">Unlock bulk download with Flex — ₦24,999</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Download all photos at once and display a live slideshow.</p>
                   </div>
-                ))}
+                  <Link href="/pricing" className="bg-[#0A4F6B] text-white text-xs font-bold px-3 py-2 rounded-xl hover:opacity-90 flex-shrink-0">
+                    Upgrade
+                  </Link>
+                </div>
+              )}
+
+              {/* Grid */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                {uploads.map(upload => {
+                  const isSelected = selected.has(upload.id)
+                  const url = upload.display_url || upload.original_url
+                  return (
+                    <div
+                      key={upload.id}
+                      className={`relative aspect-square rounded-xl overflow-hidden bg-slate-100 cursor-pointer group ${
+                        isSelected ? 'ring-2 ring-[#0A4F6B] ring-offset-1' : ''
+                      }`}
+                      onClick={() => isSelecting && toggleSelect(upload.id)}
+                    >
+                      {upload.type === 'photo' ? (
+                        <img src={url || ''} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800">
+                          <svg className="w-8 h-8 text-white/60 mb-1" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-white/40 text-xs">Video</span>
+                        </div>
+                      )}
+                      {upload.status === 'processing' && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <span className="text-white text-xs font-semibold">Processing…</span>
+                        </div>
+                      )}
+                      {isSelecting && (
+                        <div className={`absolute top-1.5 left-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                          isSelected ? 'bg-[#0A4F6B] border-[#0A4F6B]' : 'bg-white/80 border-white'
+                        }`}>
+                          {isSelected && (
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </>
           )}
         </div>
       )}
 
-      {/* ── REEL TAB ─────────────────────────────────────────────────────────── */}
-      {tab === 'reel' && (
-        <div className="bg-white rounded-2xl border border-midnight-100 p-6 text-center">
-          <div className="text-5xl mb-4">🎬</div>
-          <h2 className="font-display font-bold text-xl text-midnight-900 mb-2">AI Reel Generator</h2>
-          <p className="text-sm text-midnight-500 mb-6 max-w-md mx-auto">
-            Turn your event photos into a TikTok-ready reel with music, transitions, and your event hashtag.
-          </p>
-          {event.plan === 'free' ? (
-            <div>
-              <p className="text-sm text-midnight-400 mb-4">Upgrade to Flex or Pro to generate AI reels.</p>
-              <button className="px-6 py-3 bg-gradient-brand text-white font-bold rounded-xl shadow-brand">
-                Upgrade Plan
-              </button>
+      {/* ── SLIDESHOW ────────────────────────────────────────────────────── */}
+      {tab === 'slideshow' && (
+        <div>
+          {!planSupportsSlideshow ? (
+            <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center">
+              <div className="text-5xl mb-4">🎞</div>
+              <h2 className="font-bold text-xl text-slate-900 mb-2">Live Slideshow</h2>
+              <p className="text-sm text-slate-500 mb-5 max-w-sm mx-auto">
+                Display an auto-cycling slideshow of guest photos on a screen at your event. Available on Flex and Pro.
+              </p>
+              <Link href="/pricing" className="inline-block bg-[#0A4F6B] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm">
+                Upgrade to Flex — ₦24,999 →
+              </Link>
+            </div>
+          ) : slideshowImages.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-100 py-16 text-center">
+              <div className="text-5xl mb-3">📷</div>
+              <p className="text-slate-400 text-sm">No photos yet. Share your QR code to get started.</p>
             </div>
           ) : (
-            <button className="px-6 py-3 bg-ocean text-white font-bold rounded-xl shadow-brand hover:bg-ocean-600 transition-all">
-              Generate Basic Reel
-            </button>
+            <div>
+              <div className="bg-black rounded-2xl overflow-hidden aspect-video relative">
+                <img
+                  key={slideIdx}
+                  src={slideshowImages[slideIdx]?.display_url || slideshowImages[slideIdx]?.original_url || ''}
+                  alt=""
+                  className="w-full h-full object-contain animate-fade"
+                />
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+                  {slideshowImages.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSlideIdx(i)}
+                      className={`w-2 h-2 rounded-full transition-all ${i === slideIdx ? 'bg-white' : 'bg-white/40'}`}
+                    />
+                  ))}
+                </div>
+                <div className="absolute top-4 right-4 bg-black/50 text-white text-xs px-3 py-1 rounded-full">
+                  {slideIdx + 1} / {slideshowImages.length}
+                </div>
+                {event.hashtag && (
+                  <div className="absolute bottom-10 right-4 bg-black/50 text-white text-sm font-bold px-3 py-1 rounded-full">
+                    #{event.hashtag}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 text-center mt-3">Slides change every 3 seconds automatically.</p>
+            </div>
           )}
         </div>
       )}
 
-      {/* ── SETTINGS TAB ─────────────────────────────────────────────────────── */}
+      {/* ── AI REEL ──────────────────────────────────────────────────────── */}
+      {tab === 'reel' && (
+        <div className="bg-white rounded-2xl border border-slate-100 p-6">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-4">🎬</div>
+            <h2 className="font-bold text-xl text-slate-900 mb-2">AI Highlight Reel</h2>
+            <p className="text-sm text-slate-500 max-w-md mx-auto">
+              Automatically generate a cinematic short video from your event photos — ready for Instagram Reels or TikTok.
+            </p>
+          </div>
+
+          {!planSupportsReel ? (
+            <div className="text-center">
+              <div className="bg-[#0A4F6B]/5 border border-[#0A4F6B]/20 rounded-2xl p-5 mb-5 max-w-sm mx-auto">
+                <p className="text-sm font-semibold text-slate-800 mb-1">Upgrade to Pro to unlock AI Reel</p>
+                <p className="text-xs text-slate-500">Pro plan includes a basic AI reel from your guest photos.</p>
+              </div>
+              <Link href="/pricing" className="inline-block bg-[#0A4F6B] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm">
+                Upgrade to Pro — ₦49,999 →
+              </Link>
+            </div>
+          ) : (
+            <div className="text-center">
+              {reelStatus === 'idle' && (
+                <button
+                  onClick={generateReel}
+                  disabled={photos.length < 3}
+                  className="bg-[#0A4F6B] disabled:opacity-40 text-white font-bold px-8 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm"
+                >
+                  {photos.length < 3 ? 'Need at least 3 photos' : 'Generate AI Reel'}
+                </button>
+              )}
+              {reelStatus === 'generating' && (
+                <div>
+                  <div className="w-12 h-12 border-4 border-[#0A4F6B]/20 border-t-[#0A4F6B] rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-sm text-slate-500">Generating your highlight reel…</p>
+                  <p className="text-xs text-slate-400 mt-1">This may take a few minutes.</p>
+                </div>
+              )}
+              {reelStatus === 'done' && reelUrl && (
+                <div>
+                  <div className="text-4xl mb-3">✅</div>
+                  <p className="font-semibold text-slate-900 mb-4">Your reel is ready!</p>
+                  <a
+                    href={reelUrl}
+                    download={`${event.name}-reel.mp4`}
+                    className="inline-block bg-[#14B8A6] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-all text-sm"
+                  >
+                    ↓ Download Reel
+                  </a>
+                </div>
+              )}
+              {reelStatus === 'error' && (
+                <div>
+                  <p className="text-[#E8735C] text-sm mb-3">Reel generation failed. Please try again.</p>
+                  <button onClick={() => setReelStatus('idle')} className="text-sm text-[#0A4F6B] underline">Try again</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SETTINGS ─────────────────────────────────────────────────────── */}
       {tab === 'settings' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-midnight-100 p-5">
-            <h3 className="font-display font-bold text-midnight-900 mb-4">Event settings</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-midnight-700 mb-2">Custom accent color</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    defaultValue={event.custom_color || '#0A4F6B'}
-                    className="w-10 h-10 rounded-lg cursor-pointer border border-midnight-200"
-                  />
-                  <span className="text-sm text-midnight-500">Shown on the guest upload page</span>
-                </div>
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
+            <h3 className="font-bold text-slate-900 mb-4">Event settings</h3>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Custom accent colour</label>
+              <div className="flex items-center gap-3">
+                <input type="color" defaultValue={event.custom_color || '#0A4F6B'} className="w-10 h-10 rounded-lg cursor-pointer border border-slate-200" />
+                <span className="text-sm text-slate-500">Shown on the guest upload page</span>
               </div>
             </div>
           </div>
-
           <div className="bg-red-50 border border-red-100 rounded-2xl p-5">
-            <h3 className="font-semibold text-red-700 mb-2">Danger Zone</h3>
-            <p className="text-xs text-red-500 mb-3">This cannot be undone.</p>
+            <h3 className="font-semibold text-red-700 mb-2">Danger zone</h3>
+            <p className="text-xs text-red-500 mb-3">Deleting an event is permanent and cannot be undone.</p>
             <button className="text-sm text-red-600 font-semibold border border-red-200 px-4 py-2 rounded-xl hover:bg-red-100 transition-all">
-              Delete Event
+              Delete event
             </button>
           </div>
         </div>
