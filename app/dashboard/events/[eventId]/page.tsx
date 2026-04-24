@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createServerClient_server } from '@/lib/supabase/server'
+import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
 import EventDetailClient from './EventDetailClient'
 
 interface Props {
@@ -12,13 +12,17 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
   const { eventId } = await params
   const { payment } = await searchParams
   const paymentSuccess = payment === 'success'
-  const supabase = await createServerClient_server()
 
+  // Auth check via SSR client (needs cookies)
+  const supabase = await createServerClient_server()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
+  // Admin client for DB queries — bypasses RLS for server-side fetches
+  const admin = createAdminClient()
+
   // Verify ownership
-  const { data: event } = await supabase
+  const { data: event } = await admin
     .from('events')
     .select('*')
     .eq('id', eventId)
@@ -28,7 +32,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
   if (!event) notFound()
 
   // Fetch recent uploads
-  const { data: uploads } = await supabase
+  const { data: uploads } = await admin
     .from('uploads')
     .select('*')
     .eq('event_id', eventId)

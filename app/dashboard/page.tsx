@@ -1,18 +1,20 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { createServerClient_server } from '@/lib/supabase/server'
+import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
 import { formatNaira } from '@/lib/pricing'
 
 export default async function DashboardPage() {
+  // Auth check via SSR client (needs cookies)
   const supabase = await createServerClient_server()
-
-  // Get current user
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
+  // Use admin client for DB queries — bypasses RLS which blocks SSR anon client
+  const admin = createAdminClient()
+
   // Get profile
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from('profiles')
     .select('*')
     .eq('id', user.id)
@@ -21,7 +23,7 @@ export default async function DashboardPage() {
   if (!profile) redirect('/auth/login')
 
   // Get events
-  const { data: events } = await supabase
+  const { data: events } = await admin
     .from('events')
     .select('*')
     .eq('host_id', user.id)

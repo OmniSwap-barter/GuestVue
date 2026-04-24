@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createServerClient_server } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
 import { formatNaira, AFFILIATE } from '@/lib/pricing'
 
 export default async function AffiliatePage() {
@@ -9,16 +8,16 @@ export default async function AffiliatePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: profile } = await supabase
+  // Use admin client for all DB queries — bypasses RLS
+  const admin = createAdminClient()
+
+  const { data: profile } = await admin
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single()
 
   if (!profile) redirect('/auth/login')
-
-  // Get or create affiliate record
-  const admin = createAdminClient()
   let affiliate = null
 
   if (profile.referral_code) {
