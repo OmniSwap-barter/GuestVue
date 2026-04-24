@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerClient_server, createServerUserClient } from '@/lib/supabase/server'
 import { formatNaira, AFFILIATE } from '@/lib/pricing'
+import AffiliateCopyButton from './AffiliateCopyButton'
 
 export default async function AffiliatePage() {
   const supabase = await createServerClient_server()
@@ -98,15 +99,7 @@ export default async function AffiliatePage() {
               </button>
             </form>
           ) : (
-            <div className="flex items-center gap-2 bg-white/15 rounded-xl px-4 py-2 backdrop-blur-sm">
-              <span className="text-sm font-mono font-bold">{affiliateLink}</span>
-              <button
-                onClick={() => navigator.clipboard.writeText(affiliateLink || '')}
-                className="ml-auto bg-white text-ocean text-xs font-bold px-3 py-1 rounded-lg hover:scale-105 transition-all"
-              >
-                Copy
-              </button>
-            </div>
+            <AffiliateCopyButton link={affiliateLink || ''} />
           )}
         </div>
 
@@ -160,9 +153,12 @@ export default async function AffiliatePage() {
             {/* Payout info */}
             <div className="bg-white rounded-2xl border border-midnight-100 p-5">
               <h3 className="font-display font-bold text-midnight-900 mb-1">Payout details</h3>
-              <p className="text-sm text-midnight-500 mb-4">
+              <p className="text-sm text-midnight-500 mb-1">
                 Minimum payout: {formatNaira(AFFILIATE.payoutMinimum)}.
-                Request a payout when your balance reaches this amount.
+                Payouts are processed <strong>bi-weekly</strong> (every 2 weeks).
+              </p>
+              <p className="text-xs text-midnight-400 mb-4">
+                Referral commission applies to <strong>first-time users only</strong> — one commission per unique new host sign-up through your link.
               </p>
               <div className="flex items-center justify-between">
                 <div>
@@ -172,7 +168,8 @@ export default async function AffiliatePage() {
                   </p>
                 </div>
                 <button
-                  disabled={(affiliate.total_earned - affiliate.total_paid) < AFFILIATE.payoutMinimum * 100}
+                  disabled
+                  title="Contact support to request a payout"
                   className="bg-ocean disabled:opacity-40 text-white font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-ocean-600 transition-all"
                 >
                   Request Payout

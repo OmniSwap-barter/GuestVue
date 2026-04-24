@@ -10,7 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: { eventId: str
   const { data: event } = await admin.from('events').select('*').eq('id', params.eventId).eq('host_id', user.id).single() as any
   if (!event) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const { data: uploads } = await admin.from('uploads').select('original_url, display_url, type, created_at').eq('event_id', params.eventId).eq('status', 'ready') as any
+  const { data: uploads } = await admin.from('uploads').select('original_url, display_url, type, created_at').eq('event_id', params.eventId).in('status', ['ready', 'processing']) as any
 
   // Return list of URLs for client-side individual download
   // (True ZIP generation requires server-side streaming — return URLs for now)

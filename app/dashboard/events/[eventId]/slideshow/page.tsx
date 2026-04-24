@@ -17,7 +17,7 @@ export default function SlideshowPage() {
     async function load() {
       const { data: ev } = await supabase.from('events').select('*').eq('id', eventId).single()
       setEvent(ev)
-      const { data: ups } = await supabase.from('uploads').select('*').eq('event_id', eventId).eq('status', 'ready').order('created_at', { ascending: false })
+      const { data: ups } = await supabase.from('uploads').select('*').eq('event_id', eventId).in('status', ['ready', 'processing']).order('created_at', { ascending: false })
       setUploads(ups ?? [])
     }
     load()

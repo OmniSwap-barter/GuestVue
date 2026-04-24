@@ -10,8 +10,8 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
   const { data: event } = await admin.from('events').select('*').eq('id', params.eventId).eq('host_id', user.id).single() as any
   if (!event) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Insert reel job
-  const { data: reel, error } = await admin.from('reels').insert({ event_id: params.eventId, status: 'pending' }).select().single() as any
+  // Insert reel job — 'type' is NOT NULL so must be provided
+  const { data: reel, error } = await admin.from('reels').insert({ event_id: params.eventId, type: 'highlight', status: 'queued' }).select().single() as any
   if (error) return NextResponse.json({ error: 'Failed to queue reel' }, { status: 500 })
 
   // Dispatch to Railway worker

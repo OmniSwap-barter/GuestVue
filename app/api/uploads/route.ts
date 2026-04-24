@@ -139,19 +139,22 @@ export async function POST(req: NextRequest) {
     const originalUrl = `${process.env.R2_PUBLIC_URL}/${key}`
 
     // ── Insert upload row ─────────────────────────────────────────────────────
+    // Status is 'ready' immediately so gallery/slideshow work without the worker.
+    // When the Railway worker processes the file, it will update display_url and
+    // can leave status as 'ready' (compression is an enhancement, not a gate).
     const { data: uploadRow, error: insertError } = await supabase
       .from('uploads')
       .insert({
         event_id: eventId,
         original_url: originalUrl,
-        display_url: null, // set by worker after compression
+        display_url: originalUrl, // worker will overwrite with compressed version later
         type: isVideo ? 'video' : 'photo',
         size_bytes: file.size,
         duration_secs: null,
-        status: 'processing',
-        moderation_ok: null,
+        status: 'ready',
+        moderation_ok: true,
         guest_ip_hash: ipHash,
-        flagged_for_reel: false,
+        flagged_for_reel: true,
       })
       .select('id')
       .single()
@@ -163,6 +166,15 @@ export async function POST(req: NextRequest) {
 
     // ── Increment event upload_count ──────────────────────────────────────────
     await supabase.rpc('increment_upload_count', { event_id_input: eventId })
+      .then(({ error }) => {
+        if (error) {
+          // RPC missing — fall back to direct SQL increment
+          return supabase
+            .from('events')
+            .update({ upload_count: (event.upload_count ?? 0) + 1 })
+            .eq('id', eventId)
+        }
+      })
 
     // ── Dispatch to Railway worker (fire-and-forget) ───────────────────────────
     if (process.env.RAILWAY_WORKER_URL && process.env.WORKER_SECRET) {
