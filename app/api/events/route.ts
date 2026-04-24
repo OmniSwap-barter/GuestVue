@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient_server, createAdminClient, createUserAuthClient } from '@/lib/supabase/server'
+import { createServerClient_server, createServerUserClient } from '@/lib/supabase/server'
 import { PLANS } from '@/lib/pricing'
 import QRCode from 'qrcode'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
@@ -25,10 +25,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: { session } } = await supabase.auth.getSession()
-    const db = session?.access_token
-      ? createUserAuthClient(session.access_token)
-      : createAdminClient()
+    const db = await createServerUserClient()
 
     const body = await req.json()
     const { name, event_date, hashtag, plan } = body as {
@@ -176,7 +173,8 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: events } = await supabase
+    const db = await createServerUserClient()
+    const { data: events } = await db
       .from('events')
       .select('*')
       .eq('host_id', user.id)

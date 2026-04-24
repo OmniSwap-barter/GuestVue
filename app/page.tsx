@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { formatNaira, PLANS, PLANNER_PLANS } from '@/lib/pricing'
+import { formatNaira, PLANS, PLANNER_PLANS, BRAND_MONTHLY } from '@/lib/pricing'
 
 const FEATURES = [
   { icon: '📱', title: 'No App Required', desc: 'Guests scan a QR code and upload directly from their phone browser. iOS, Android, old and new — it just works.' },
@@ -449,6 +449,66 @@ export default function HomePage() {
             Need custom pricing for a large agency or corporate client?{' '}
             <Link href="/contact" className="text-teal hover:underline">Contact us</Link>
           </p>
+
+          {/* Divider */}
+          <div className="neon-line my-16" />
+
+          {/* Brand Monthly plans */}
+          <div className="text-center mb-10">
+            <div className="section-label-dark mb-4">For Brands &amp; Businesses</div>
+            <h3 className="font-display font-black text-2xl sm:text-3xl text-white mb-3">Brand Monthly Plans</h3>
+            <p className="text-white/50 max-w-lg mx-auto">Recurring monthly subscription for brands, corporates, and agencies running unlimited events. Cancel any time.</p>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-5">
+            {([
+              {
+                tier: BRAND_MONTHLY.starter,
+                features: ['Unlimited events', '300 uploads per event', 'Bulk download', 'Live slideshow', 'Priority support'],
+                featured: false,
+              },
+              {
+                tier: BRAND_MONTHLY.growth,
+                features: ['Unlimited events', '600 uploads per event', 'Bulk download', 'Live slideshow', 'White-label branding', 'Priority support'],
+                featured: true,
+              },
+              {
+                tier: BRAND_MONTHLY.enterprise,
+                features: ['Unlimited events', 'Unlimited uploads', 'Bulk download', 'Live slideshow + AI reel', 'White-label branding', 'Dedicated account manager'],
+                featured: false,
+              },
+            ]).map(({ tier, features, featured }) => (
+              <div key={tier.id} className={`pricing-card ${featured ? 'featured' : ''} relative`}>
+                {featured && (
+                  <div className="absolute top-4 right-4">
+                    <span className="badge-new">Popular</span>
+                  </div>
+                )}
+                <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${featured ? 'text-teal' : 'text-midnight-400'}`}>{tier.name}</p>
+                <div className="flex items-baseline gap-1 mb-0.5">
+                  <span className={`font-display font-black text-3xl ${featured ? 'text-white' : 'text-midnight-900'}`}>{formatNaira(tier.price)}</span>
+                  <span className={`text-sm ${featured ? 'text-white/50' : 'text-midnight-400'}`}>/mo</span>
+                </div>
+                <p className={`text-xs mb-5 ${featured ? 'text-white/40' : 'text-midnight-400'}`}>billed monthly · cancel any time</p>
+                <div className="space-y-2 mb-6">
+                  {features.map(item => (
+                    <div key={item} className={featured ? 'check-item-dark' : 'check-item'}>
+                      <span className="check">✓</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/auth/signup"
+                  className={`block text-center py-2.5 rounded-xl font-bold text-sm transition-all ${
+                    featured
+                      ? 'bg-gradient-teal-coral text-white hover:opacity-90 shadow-teal'
+                      : 'bg-midnight-100 text-midnight-700 hover:bg-midnight-200'
+                  }`}>
+                  Get {tier.name} →
+                </Link>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

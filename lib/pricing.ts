@@ -81,7 +81,7 @@ export const BRAND_MONTHLY = {
     name: 'Brand Starter',
     price: 49999,
     priceKobo: 4999900,
-    eventsPerMonth: 2,
+    eventsPerMonth: -1, // unlimited
     uploadsPerEvent: 300,
     whiteLabel: false,
     dedicatedSupport: false,
@@ -92,7 +92,7 @@ export const BRAND_MONTHLY = {
     name: 'Brand Growth',
     price: 99999,
     priceKobo: 9999900,
-    eventsPerMonth: 6,
+    eventsPerMonth: -1, // unlimited
     uploadsPerEvent: 600,
     whiteLabel: true,
     dedicatedSupport: false,

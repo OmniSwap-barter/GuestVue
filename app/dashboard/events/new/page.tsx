@@ -1,16 +1,13 @@
 import { redirect } from 'next/navigation'
 import CreateEventForm from './CreateEventForm'
-import { createServerClient_server, createAdminClient, createUserAuthClient } from '@/lib/supabase/server'
+import { createServerClient_server, createServerUserClient } from '@/lib/supabase/server'
 
 export default async function NewEventPage() {
   const supabase = await createServerClient_server()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: { session } } = await supabase.auth.getSession()
-  const db = session?.access_token
-    ? createUserAuthClient(session.access_token)
-    : createAdminClient()
+  const db = await createServerUserClient()
 
   const { data: profile } = await db
     .from('profiles')

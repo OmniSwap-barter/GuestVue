@@ -52,3 +52,54 @@ export function createUserAuthClient(accessToken: string) {
     }
   )
 }
+
+// ─── Direct cookie token reader ───────────────────────────────────────────────
+// @supabase/ssr@0.5.x stores the session as:
+//   "base64-<base64url(sessionJSON)>" in cookie "sb-<projectRef>-auth-token"
+// (possibly chunked into .0, .1, .2 … if over 3180 encoded bytes).
+// getSession() is unreliable in Next.js server components — this reads
+// the token directly from cookies so createUserAuthClient always gets a
+// fresh, valid JWT without depending on getSession() at all.
+const PROJECT_REF =
+  process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/\/\/([^.]+)/)?.[1] ?? ''
+const AUTH_COOKIE_KEY = `sb-${PROJECT_REF}-auth-token`
+const SUPABASE_BASE64_PREFIX = 'base64-'
+
+export async function getServerAccessToken(): Promise<string | null> {
+  try {
+    const cookieStore = await cookies()
+    const all = cookieStore.getAll()
+
+    // Reassemble chunked cookie: try base key first, then .0, .1, .2 …
+    let combined = ''
+    const base = all.find(c => c.name === AUTH_COOKIE_KEY)
+    if (base) {
+      combined = base.value
+    } else {
+      for (let i = 0; i < 10; i++) {
+        const chunk = all.find(c => c.name === `${AUTH_COOKIE_KEY}.${i}`)
+        if (!chunk) break
+        combined += chunk.value
+      }
+    }
+
+    if (!combined) return null
+
+    // Decode the base64- prefix that @supabase/ssr adds before storing
+    const raw = combined.startsWith(SUPABASE_BASE64_PREFIX)
+      ? Buffer.from(combined.slice(SUPABASE_BASE64_PREFIX.length), 'base64url').toString('utf-8')
+      : combined
+
+    const session = JSON.parse(raw)
+    return (session?.access_token as string) ?? null
+  } catch {
+    return null
+  }
+}
+
+// Convenience: returns a db client authenticated as the current user.
+// Falls back to admin client if no token is found (e.g. SSR pre-render).
+export async function createServerUserClient() {
+  const token = await getServerAccessToken()
+  return token ? createUserAuthClient(token) : createAdminClient()
+}

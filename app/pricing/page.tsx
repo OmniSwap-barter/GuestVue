@@ -224,13 +224,13 @@ export default function PricingPage() {
             {([
               {
                 plan: BRAND_MONTHLY.starter,
-                features: ['2 events per month', '300 uploads per event', 'Bulk download', 'Live slideshow', 'Priority support'],
+                features: ['Unlimited events', '300 uploads per event', 'Bulk download', 'Live slideshow', 'Priority support'],
                 highlight: false,
                 tag: null as string | null,
               },
               {
                 plan: BRAND_MONTHLY.growth,
-                features: ['6 events per month', '600 uploads per event', 'Bulk download', 'Live slideshow', 'White-label branding', 'Priority support'],
+                features: ['Unlimited events', '600 uploads per event', 'Bulk download', 'Live slideshow', 'White-label branding', 'Priority support'],
                 highlight: true,
                 tag: 'Most popular' as string | null,
               },
@@ -397,7 +397,7 @@ export default function PricingPage() {
             {[
               {
                 q: 'Are these one-time payments or subscriptions?',
-                a: 'Personal plans (Free, Flex, Pro) are one-time, per-event payments. Business activations and Vendor bundles are also one-time purchases — you pay once and use your credits across multiple events.',
+                a: 'Personal plans (Free, Flex, Pro) are one-time, per-event payments. Business activations and Vendor bundles are also one-time purchases. Brand Monthly plans are recurring subscriptions — billed each month and cancellable any time.',
               },
               {
                 q: 'Can I upgrade after creating an event?',
