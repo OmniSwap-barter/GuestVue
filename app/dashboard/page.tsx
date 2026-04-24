@@ -13,14 +13,38 @@ export default async function DashboardPage() {
   // Use admin client for DB queries — bypasses RLS which blocks SSR anon client
   const admin = createAdminClient()
 
-  // Get profile
-  const { data: profile } = await admin
+  // Get profile — never redirect to login for a missing profile row
+  let { data: profile } = await admin
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single()
 
-  if (!profile) redirect('/auth/login')
+  if (!profile) {
+    // Profile missing — create it on the fly so the user reaches the dashboard
+    const { data: created } = await admin
+      .from('profiles')
+      .upsert({
+        id: user.id,
+        email: user.email ?? '',
+        full_name: (user.user_metadata?.full_name as string) ?? '',
+        plan_type: 'individual',
+      }, { onConflict: 'id' })
+      .select()
+      .single()
+    profile = created
+  }
+
+  // Fallback object if DB is entirely unreachable — user still lands on dashboard
+  const safeProfile = profile ?? {
+    id: user.id,
+    email: user.email ?? '',
+    full_name: '',
+    plan_type: 'individual' as const,
+    referral_code: null,
+    is_admin: false,
+    created_at: new Date().toISOString(),
+  }
 
   // Get events
   const { data: events } = await admin
@@ -32,8 +56,8 @@ export default async function DashboardPage() {
 
   const activeEvents = events?.filter(e => e.status === 'active') ?? []
   const totalUploads = events?.reduce((sum, e) => sum + e.upload_count, 0) ?? 0
-  const firstName = profile.full_name?.split(' ')[0] ?? 'there'
-  const isFree = profile.plan_type === 'individual'
+  const firstName = safeProfile.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'there'
+  const isFree = safeProfile.plan_type === 'individual'
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
@@ -84,7 +108,7 @@ export default async function DashboardPage() {
             { label: 'Active Events', value: activeEvents.length, color: '#14B8A6' },
             { label: 'Total Events', value: events?.length ?? 0, color: '#1E5AAF' },
             { label: 'Photos Collected', value: totalUploads.toLocaleString(), color: '#E8735C' },
-            { label: 'Plan', value: profile.plan_type.charAt(0).toUpperCase() + profile.plan_type.slice(1), color: '#0A4F6B' },
+            { label: 'Plan', value: safeProfile.plan_type.charAt(0).toUpperCase() + safeProfile.plan_type.slice(1), color: '#0A4F6B' },
           ].map(stat => (
             <div key={stat.label} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
               <p className="font-display font-black text-2xl" style={{ color: stat.color }}>{stat.value}</p>

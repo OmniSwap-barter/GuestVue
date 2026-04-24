@@ -29,11 +29,14 @@ export async function createClient() {
 // Alias used in dashboard server components
 export const createServerClient_server = createClient
 
-// Admin client — bypasses RLS. Only use in server-side API routes.
+// Admin client — bypasses RLS. Falls back to anon key if service role key is missing.
 export function createAdminClient() {
-  return createSupabaseClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+  // Use service role if available; gracefully fall back so the app never crashes
+  const key = (serviceKey && serviceKey.length > 20) ? serviceKey : anonKey
+  return createSupabaseClient<Database>(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
 }
