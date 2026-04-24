@@ -13,6 +13,9 @@ function getR2Client() {
       accessKeyId: process.env.R2_ACCESS_KEY_ID!,
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
     },
+    // AWS SDK v3 ≥3.525 adds CRC32 checksums by default; R2 rejects them.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   })
 }
 
