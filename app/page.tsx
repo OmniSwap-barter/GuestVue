@@ -356,17 +356,44 @@ export default function HomePage() {
             {([
               {
                 plan: PLANS.free,
-                items: ['50 uploads (photos & videos)', '24-hour active page', '7 days storage', 'Good quality saves', 'Add-ons available'],
+                items: [
+                  '50 guest uploads (photos & videos)',
+                  '24-hour active guest page',
+                  'QR code + share link',
+                  'Basic gallery & customisation',
+                  'Good quality saves',
+                  '7 days storage',
+                  'Add-ons: AI reel, slideshow, extended page',
+                ],
                 isFeatured: false,
               },
               {
                 plan: PLANS.flex,
-                items: ['500 uploads (photos & videos)', '1-month active page', '2 months storage', 'High quality saves', 'Bulk download ✓', 'Basic AI reel ✓', 'Live slideshow ✓'],
+                items: [
+                  '500 guest uploads (photos & videos)',
+                  '1-month active guest page',
+                  '2 months storage',
+                  'High quality saves',
+                  'Bulk download (all at once)',
+                  'Basic AI highlight reel ✓',
+                  'Live slideshow display ✓',
+                  'Better customisation options',
+                ],
                 isFeatured: false,
               },
               {
                 plan: PLANS.pro,
-                items: ['Unlimited uploads', '3-month active page', '120 days storage', 'High quality + AI moderation', 'Bulk download ✓', 'Advanced AI reel ✓', 'Live slideshow ✓'],
+                items: [
+                  'Unlimited guest uploads',
+                  '3-month active guest page',
+                  '120 days storage',
+                  'High quality saves',
+                  'Bulk download (all at once)',
+                  'Professional advanced AI reel ✓',
+                  'Live slideshow display ✓',
+                  'Advanced customisation',
+                  'AI content moderation ✓',
+                ],
                 isFeatured: true,
               },
             ]).map(({ plan, items, isFeatured }) => (
@@ -422,25 +449,57 @@ export default function HomePage() {
             {([
               {
                 plan: PLANNER_PLANS.starter,
-                items: ['3 active events/month', '2,000 combined uploads', 'All Flex features', 'Bulk download', 'Watermark + logo'],
+                items: [
+                  '3 active events/month',
+                  '2,000 combined uploads',
+                  'All Flex features',
+                  'Bulk download',
+                  'Watermark + GuestVue logo',
+                  `Welcome form (+${formatNaira(PLANNER_PLANS.starter.welcomeFormPrice)})`,
+                  `Remove logo (+${formatNaira(PLANNER_PLANS.starter.removeLogoPrice)})`,
+                ],
                 isTop: false,
                 badge: null as string | null,
               },
               {
                 plan: PLANNER_PLANS.growth,
-                items: ['5 active events/month', 'Unlimited uploads', 'All Pro features', 'Bulk download', 'Auto photo watermark'],
+                items: [
+                  '5 active events/month',
+                  'Unlimited uploads',
+                  'All Pro features',
+                  'Bulk download',
+                  'Auto photo watermark',
+                  `Welcome form (+${formatNaira(PLANNER_PLANS.growth.welcomeFormPrice)})`,
+                  `Remove logo (+${formatNaira(PLANNER_PLANS.growth.removeLogoPrice)})`,
+                ],
                 isTop: false,
                 badge: 'Best value' as string | null,
               },
               {
                 plan: PLANNER_PLANS.scale,
-                items: ['10 active events/month', 'Unlimited uploads', 'All Pro features', 'Lead gen tools', 'Photo wall embed'],
+                items: [
+                  '10 active events/month',
+                  'Unlimited uploads',
+                  'All Pro features',
+                  'Lead generation tools',
+                  'Photo wall website embed',
+                  'Welcome forms FREE ✓',
+                  `Remove logo (+${formatNaira(PLANNER_PLANS.scale.removeLogoPrice)})`,
+                ],
                 isTop: false,
                 badge: null as string | null,
               },
               {
                 plan: PLANNER_PLANS.jagaban,
-                items: ['20 active events/month', 'Unlimited uploads', 'All Pro features', 'Lead gen tools', 'White-label solutions'],
+                items: [
+                  '20 active events/month',
+                  'Unlimited uploads',
+                  'All Pro features',
+                  'Lead generation tools',
+                  'Photo wall website embed',
+                  'Advanced welcome forms ✓',
+                  'White-label solutions',
+                ],
                 isTop: true,
                 badge: '🔥 Top Tier' as string | null,
               },
@@ -472,6 +531,8 @@ export default function HomePage() {
           <p className="text-center text-white/30 text-sm mt-6">
             Need custom pricing for a large agency?{' '}
             <Link href="/contact" className="text-teal hover:underline">Contact us</Link>
+            {' '}·{' '}
+            <Link href="/pricing" className="text-teal hover:underline">View full pricing page →</Link>
           </p>
 
           {/* Divider */}
@@ -490,12 +551,30 @@ export default function HomePage() {
             {([
               {
                 plan: BUSINESS_PLANS.activation,
-                items: ['2,000 uploads per month', 'Permanent QR + rolling gallery', 'Active while subscribed', 'Good quality + AI moderation', 'Basic AI reel generation ✓', 'Live slideshow ✓', 'Bulk download ✓'],
+                items: [
+                  '2,000 uploads per month',
+                  'Permanent QR code + rolling gallery',
+                  'Active while subscribed',
+                  'Good quality with AI moderation',
+                  'Bulk download all content',
+                  'Basic AI reel generation',
+                  'Live slideshow display',
+                  'Better customisation options',
+                ],
                 featured: false,
               },
               {
                 plan: BUSINESS_PLANS.tycoon,
-                items: ['Unlimited uploads', 'Permanent QR + rolling gallery', 'Active while subscribed', 'High quality + AI moderation', 'Advanced AI reel generation ✓', 'Live slideshow ✓', 'Bulk download ✓'],
+                items: [
+                  'Unlimited uploads per month',
+                  'Permanent QR code + rolling gallery',
+                  'Active while subscribed',
+                  'High quality with AI moderation',
+                  'Bulk download all content',
+                  'Advanced AI reel generation ✓',
+                  'Live slideshow display',
+                  'Advanced customisation',
+                ],
                 featured: true,
               },
             ]).map(({ plan, items, featured }) => (
