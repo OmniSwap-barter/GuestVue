@@ -74,6 +74,43 @@ export const BUSINESS_PLANS = {
   },
 } as const
 
+// Monthly brand/business subscriptions — recurring billing
+export const BRAND_MONTHLY = {
+  starter: {
+    id: 'brand_monthly_starter',
+    name: 'Brand Starter',
+    price: 49999,
+    priceKobo: 4999900,
+    eventsPerMonth: 2,
+    uploadsPerEvent: 300,
+    whiteLabel: false,
+    dedicatedSupport: false,
+    paystackPlanCode: 'PLN_brand_starter_monthly',
+  },
+  growth: {
+    id: 'brand_monthly_growth',
+    name: 'Brand Growth',
+    price: 99999,
+    priceKobo: 9999900,
+    eventsPerMonth: 6,
+    uploadsPerEvent: 600,
+    whiteLabel: true,
+    dedicatedSupport: false,
+    paystackPlanCode: 'PLN_brand_growth_monthly',
+  },
+  enterprise: {
+    id: 'brand_monthly_enterprise',
+    name: 'Brand Enterprise',
+    price: 199999,
+    priceKobo: 19999900,
+    eventsPerMonth: -1, // unlimited
+    uploadsPerEvent: -1, // unlimited
+    whiteLabel: true,
+    dedicatedSupport: true,
+    paystackPlanCode: 'PLN_brand_enterprise_monthly',
+  },
+} as const
+
 // Vendor / Professional packages — one-time bundle for planners, photographers, agencies
 export const PLANNER_PLANS = {
   starter: {

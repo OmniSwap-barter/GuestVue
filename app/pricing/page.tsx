@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import Logo from '@/components/Logo'
-import { formatNaira, PLANS, BUSINESS_PLANS, PLANNER_PLANS, ADDONS } from '@/lib/pricing'
+import { formatNaira, PLANS, BUSINESS_PLANS, BRAND_MONTHLY, PLANNER_PLANS, ADDONS } from '@/lib/pricing'
 
 export const metadata = {
   title: 'Pricing — GuestVue',
@@ -199,6 +199,86 @@ export default function PricingPage() {
                   className={`block text-center py-3 rounded-xl font-bold text-sm transition-all ${
                     highlight
                       ? 'bg-[#0A4F6B] text-white hover:bg-[#1E5AAF]'
+                      : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  Get {plan.name}
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Brand Monthly Subscriptions */}
+        <section>
+          <div className="text-center mb-10">
+            <span className="inline-block bg-[#E8735C]/10 text-[#E8735C] text-xs font-black px-3 py-1 rounded-full mb-3 uppercase tracking-wider">
+              For businesses &amp; brands
+            </span>
+            <h2 className="font-black text-2xl sm:text-3xl text-slate-900 mb-2">Brand monthly plans</h2>
+            <p className="text-slate-400 text-sm max-w-md mx-auto">
+              Recurring monthly subscriptions for businesses, brands, and agencies running events consistently. Cancel any time.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-6">
+            {([
+              {
+                plan: BRAND_MONTHLY.starter,
+                features: ['2 events per month', '300 uploads per event', 'Bulk download', 'Live slideshow', 'Priority support'],
+                highlight: false,
+                tag: null as string | null,
+              },
+              {
+                plan: BRAND_MONTHLY.growth,
+                features: ['6 events per month', '600 uploads per event', 'Bulk download', 'Live slideshow', 'White-label branding', 'Priority support'],
+                highlight: true,
+                tag: 'Most popular' as string | null,
+              },
+              {
+                plan: BRAND_MONTHLY.enterprise,
+                features: ['Unlimited events', 'Unlimited uploads', 'Bulk download', 'Live slideshow + AI reel', 'White-label branding', 'Dedicated account manager'],
+                highlight: false,
+                tag: 'Enterprise' as string | null,
+              },
+            ]).map(({ plan, features, highlight, tag }) => (
+              <div
+                key={plan.id}
+                className={`rounded-2xl border-2 p-6 flex flex-col bg-white relative ${
+                  highlight ? 'border-[#E8735C] shadow-lg' : 'border-slate-100'
+                }`}
+              >
+                {tag && (
+                  <span className={`absolute -top-3 left-4 text-white text-xs font-black px-2.5 py-1 rounded-full ${
+                    highlight ? 'bg-[#E8735C]' : 'bg-[#0A4F6B]'
+                  }`}>
+                    {tag}
+                  </span>
+                )}
+                <p className="font-bold text-slate-900">{plan.name}</p>
+                <div className="mt-1 mb-0.5">
+                  <span className={`font-black text-2xl ${highlight ? 'text-[#E8735C]' : 'text-slate-900'}`}>
+                    {formatNaira(plan.price)}
+                  </span>
+                  <span className="text-slate-400 text-sm font-medium">/mo</span>
+                </div>
+                <p className="text-xs text-slate-400 mb-4">billed monthly · cancel any time</p>
+                <ul className="space-y-1.5 mb-5 flex-1">
+                  {features.map(f => (
+                    <li key={f} className="flex items-start gap-1.5 text-xs text-slate-600">
+                      <span className="mt-0.5 flex-shrink-0" style={{ color: highlight ? '#E8735C' : '#14B8A6' }}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/auth/signup"
+                  className={`block text-center py-2.5 rounded-xl font-bold text-sm transition-all ${
+                    highlight
+                      ? 'bg-[#E8735C] text-white hover:opacity-90'
                       : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
                 >
