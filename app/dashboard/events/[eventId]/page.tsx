@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
+import { createServerClient_server, createAdminClient, createUserAuthClient } from '@/lib/supabase/server'
 import EventDetailClient from './EventDetailClient'
 
 interface Props {
@@ -18,11 +18,13 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Admin client for DB queries — bypasses RLS for server-side fetches
-  const admin = createAdminClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  const db = session?.access_token
+    ? createUserAuthClient(session.access_token)
+    : createAdminClient()
 
   // Verify ownership
-  const { data: event } = await admin
+  const { data: event } = await db
     .from('events')
     .select('*')
     .eq('id', eventId)
@@ -32,7 +34,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
   if (!event) notFound()
 
   // Fetch recent uploads
-  const { data: uploads } = await admin
+  const { data: uploads } = await db
     .from('uploads')
     .select('*')
     .eq('event_id', eventId)

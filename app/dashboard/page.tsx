@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
+import { createServerClient_server, createAdminClient, createUserAuthClient } from '@/lib/supabase/server'
 import { formatNaira } from '@/lib/pricing'
 
 export default async function DashboardPage() {
@@ -10,8 +10,15 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Use admin client for DB queries — bypasses RLS which blocks SSR anon client
-  const admin = createAdminClient()
+  // Get the session to extract the JWT access token
+  const { data: { session } } = await supabase.auth.getSession()
+
+  // Use user-JWT client so RLS (auth.uid() = id) always works — no service role key needed
+  // Fall back to admin client if session/token unavailable
+  const db = session?.access_token
+    ? createUserAuthClient(session.access_token)
+    : createAdminClient()
+  const admin = db
 
   // Get profile — never redirect to login for a missing profile row
   let { data: profile } = await admin

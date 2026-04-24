@@ -34,9 +34,21 @@ export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
-  // Use service role if available; gracefully fall back so the app never crashes
   const key = (serviceKey && serviceKey.length > 20) ? serviceKey : anonKey
   return createSupabaseClient<Database>(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
+}
+
+// User-authenticated DB client — sets the user's JWT explicitly in the Authorization
+// header so RLS policies (auth.uid() = id) always work, regardless of service role key.
+export function createUserAuthClient(accessToken: string) {
+  return createSupabaseClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+    {
+      global: { headers: { Authorization: `Bearer ${accessToken}` } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    }
+  )
 }
