@@ -149,6 +149,7 @@ export default function CreateEventForm({ userId, planType }: Props) {
           <input
             type="date"
             value={eventDate}
+            min={new Date().toISOString().split('T')[0]}
             onChange={e => setEventDate(e.target.value)}
             className="w-full px-4 py-3 rounded-xl border border-midnight-200 focus:outline-none focus:ring-2 focus:ring-ocean/30 focus:border-ocean text-midnight-900 text-sm"
           />
