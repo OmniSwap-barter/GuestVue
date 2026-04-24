@@ -117,7 +117,8 @@ export async function POST(req: NextRequest) {
           ContentType: file.type,
           Metadata: {
             eventId,
-            originalName: file.name,
+            // URL-encode so filenames with spaces/unicode are valid HTTP header values
+            originalName: encodeURIComponent(file.name),
           },
         })
       )
