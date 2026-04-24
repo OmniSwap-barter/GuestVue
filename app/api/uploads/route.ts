@@ -105,18 +105,32 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer()
 
     const r2 = getR2Client()
-    await r2.send(
-      new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: key,
-        Body: Buffer.from(bytes),
-        ContentType: file.type,
-        Metadata: {
-          eventId,
-          originalName: file.name,
-        },
+    try {
+      await r2.send(
+        new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME!,
+          Key: key,
+          Body: Buffer.from(bytes),
+          ContentType: file.type,
+          Metadata: {
+            eventId,
+            originalName: file.name,
+          },
+        })
+      )
+    } catch (r2Err: unknown) {
+      const msg = r2Err instanceof Error ? r2Err.message : String(r2Err)
+      console.error('R2 upload failed:', {
+        message: msg,
+        bucket: process.env.R2_BUCKET_NAME,
+        endpoint: process.env.R2_ENDPOINT,
+        keyId: process.env.R2_ACCESS_KEY_ID?.slice(0, 8),
       })
-    )
+      return NextResponse.json(
+        { error: `Upload storage error: ${msg}` },
+        { status: 500 }
+      )
+    }
 
     const originalUrl = `${process.env.R2_PUBLIC_URL}/${key}`
 
