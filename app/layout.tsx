@@ -66,8 +66,20 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Inject Supabase public config at runtime from the server so the browser
+  // client doesn't depend on NEXT_PUBLIC_ vars being baked into the JS bundle.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__GV_SUPABASE_URL__=${JSON.stringify(supabaseUrl)};window.__GV_SUPABASE_ANON_KEY__=${JSON.stringify(supabaseAnonKey)};`,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   )
