@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { formatNaira, PLANS, PLANNER_PLANS, BRAND_MONTHLY } from '@/lib/pricing'
+import { formatNaira, PLANS, PLANNER_PLANS, BUSINESS_PLANS } from '@/lib/pricing'
 
 const FEATURES = [
   { icon: '📱', title: 'No App Required', desc: 'Guests scan a QR code and upload directly from their phone browser. iOS, Android, old and new — it just works.' },
@@ -353,52 +353,59 @@ export default function HomePage() {
 
           {/* Personal plans */}
           <div className="grid sm:grid-cols-3 gap-5 mb-6">
-            {Object.values(PLANS).map((plan, i) => {
-              const isFeatured = plan.id === 'pro'
-              return (
-                <div key={plan.id} className={`pricing-card ${isFeatured ? 'featured' : ''}`}>
-                  {isFeatured && (
-                    <div className="absolute top-4 right-4">
-                      <span className="badge-new">Most Popular</span>
-                    </div>
-                  )}
-                  <p className={`text-xs font-bold uppercase tracking-widest mb-3 ${isFeatured ? 'text-teal' : 'text-midnight-400'}`}>{plan.name}</p>
-                  <div className="flex items-baseline gap-1 mb-1">
-                    <span className={`font-display font-black text-4xl ${isFeatured ? 'text-white' : 'text-midnight-900'}`}>
-                      {plan.price === 0 ? 'Free' : formatNaira(plan.price)}
-                    </span>
-                    {plan.price > 0 && <span className={`text-sm ${isFeatured ? 'text-white/50' : 'text-midnight-400'}`}>/event</span>}
+            {([
+              {
+                plan: PLANS.free,
+                items: ['50 uploads (photos & videos)', '24-hour active page', '7 days storage', 'Good quality saves', 'Add-ons available'],
+                isFeatured: false,
+              },
+              {
+                plan: PLANS.flex,
+                items: ['500 uploads (photos & videos)', '1-month active page', '2 months storage', 'High quality saves', 'Bulk download ✓', 'Basic AI reel ✓', 'Live slideshow ✓'],
+                isFeatured: false,
+              },
+              {
+                plan: PLANS.pro,
+                items: ['Unlimited uploads', '3-month active page', '120 days storage', 'High quality + AI moderation', 'Bulk download ✓', 'Advanced AI reel ✓', 'Live slideshow ✓'],
+                isFeatured: true,
+              },
+            ]).map(({ plan, items, isFeatured }) => (
+              <div key={plan.id} className={`pricing-card ${isFeatured ? 'featured' : ''}`}>
+                {isFeatured && (
+                  <div className="absolute top-4 right-4">
+                    <span className="badge-new">Most Popular</span>
                   </div>
-                  <p className={`text-xs mb-6 ${isFeatured ? 'text-white/40' : 'text-midnight-400'}`}>
-                    {plan.price === 0 ? 'No credit card needed' : 'One-time per event'}
-                  </p>
-
-                  <div className="space-y-2.5 mb-8">
-                    {[
-                      `${plan.uploads === 9999 || plan.uploads > 999 ? 'Unlimited' : plan.uploads} uploads`,
-                      'activePageHours' in plan ? '24-hour active page' : `${(plan as any).activePageDays}-day active page`,
-                      plan.bulkDownload ? 'Bulk download' : 'Single file download only',
-                      plan.slideshow ? 'Live slideshow ✓' : null,
-                      plan.basicReel ? 'AI reel included ✓' : null,
-                    ].filter(Boolean).map((item) => (
-                      <div key={item} className={isFeatured ? 'check-item-dark' : 'check-item'}>
-                        <span className="check">✓</span>
-                        <span>{item}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <Link href="/auth/signup"
-                    className={`block text-center py-3 rounded-2xl font-bold text-sm transition-all ${
-                      isFeatured
-                        ? 'bg-gradient-teal-coral text-white hover:opacity-90 shadow-teal'
-                        : 'bg-midnight-100 text-midnight-700 hover:bg-midnight-200'
-                    }`}>
-                    {plan.price === 0 ? 'Start free' : `Get ${plan.name}`} →
-                  </Link>
+                )}
+                <p className={`text-xs font-bold uppercase tracking-widest mb-3 ${isFeatured ? 'text-teal' : 'text-midnight-400'}`}>{plan.name}</p>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className={`font-display font-black text-4xl ${isFeatured ? 'text-white' : 'text-midnight-900'}`}>
+                    {plan.price === 0 ? 'Free' : formatNaira(plan.price)}
+                  </span>
+                  {plan.price > 0 && <span className={`text-sm ${isFeatured ? 'text-white/50' : 'text-midnight-400'}`}>/event</span>}
                 </div>
-              )
-            })}
+                <p className={`text-xs mb-6 ${isFeatured ? 'text-white/40' : 'text-midnight-400'}`}>
+                  {plan.price === 0 ? 'No credit card needed' : 'One-time per event'}
+                </p>
+
+                <div className="space-y-2.5 mb-8">
+                  {items.map((item) => (
+                    <div key={item} className={isFeatured ? 'check-item-dark' : 'check-item'}>
+                      <span className="check">✓</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <Link href="/auth/signup"
+                  className={`block text-center py-3 rounded-2xl font-bold text-sm transition-all ${
+                    isFeatured
+                      ? 'bg-gradient-teal-coral text-white hover:opacity-90 shadow-teal'
+                      : 'bg-midnight-100 text-midnight-700 hover:bg-midnight-200'
+                  }`}>
+                  {plan.price === 0 ? 'Start free' : `Get ${plan.name}`} →
+                </Link>
+              </div>
+            ))}
           </div>
 
           {/* Divider */}
@@ -412,86 +419,100 @@ export default function HomePage() {
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Object.values(PLANNER_PLANS).map((plan, i) => {
-              const isTop = plan.id === 'jagaban'
-              return (
-                <div key={plan.id} className={`pricing-card ${isTop ? 'featured' : ''} relative`}>
-                  {isTop && <div className="absolute top-4 right-4"><span className="badge-hot">🔥 Top Tier</span></div>}
-                  <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${isTop ? 'text-teal' : 'text-midnight-400'}`}>{plan.name}</p>
-                  <div className="flex items-baseline gap-1 mb-5">
-                    <span className={`font-display font-black text-3xl ${isTop ? 'text-white' : 'text-midnight-900'}`}>{formatNaira(plan.price)}</span>
-                  </div>
-                  <div className="space-y-2 mb-6">
-                    {[
-                      `${plan.activeEvents === -1 ? 'Unlimited' : plan.activeEvents} events`,
-                      `${plan.uploadsPerEvent === -1 ? 'Unlimited' : plan.uploadsPerEvent} uploads/event`,
-                      'Bulk download',
-                      'Live slideshow',
-                    ].map(item => (
-                      <div key={item} className={isTop ? 'check-item-dark' : 'check-item'}>
-                        <span className="check">✓</span>
-                        <span>{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Link href="/auth/signup"
-                    className={`block text-center py-2.5 rounded-xl font-bold text-sm transition-all ${
-                      isTop ? 'bg-gradient-teal-coral text-white hover:opacity-90' : 'bg-midnight-100 text-midnight-700 hover:bg-midnight-200'
-                    }`}>
-                    Get {plan.name} →
-                  </Link>
+            {([
+              {
+                plan: PLANNER_PLANS.starter,
+                items: ['3 active events/month', '2,000 combined uploads', 'All Flex features', 'Bulk download', 'Watermark + logo'],
+                isTop: false,
+                badge: null as string | null,
+              },
+              {
+                plan: PLANNER_PLANS.growth,
+                items: ['5 active events/month', 'Unlimited uploads', 'All Pro features', 'Bulk download', 'Auto photo watermark'],
+                isTop: false,
+                badge: 'Best value' as string | null,
+              },
+              {
+                plan: PLANNER_PLANS.scale,
+                items: ['10 active events/month', 'Unlimited uploads', 'All Pro features', 'Lead gen tools', 'Photo wall embed'],
+                isTop: false,
+                badge: null as string | null,
+              },
+              {
+                plan: PLANNER_PLANS.jagaban,
+                items: ['20 active events/month', 'Unlimited uploads', 'All Pro features', 'Lead gen tools', 'White-label solutions'],
+                isTop: true,
+                badge: '🔥 Top Tier' as string | null,
+              },
+            ]).map(({ plan, items, isTop, badge }) => (
+              <div key={plan.id} className={`pricing-card ${isTop ? 'featured' : ''} relative`}>
+                {badge && <div className="absolute top-4 right-4"><span className={isTop ? 'badge-hot' : 'badge-new'}>{badge}</span></div>}
+                <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${isTop ? 'text-teal' : 'text-midnight-400'}`}>{plan.name}</p>
+                <div className="flex items-baseline gap-1 mb-5">
+                  <span className={`font-display font-black text-3xl ${isTop ? 'text-white' : 'text-midnight-900'}`}>{formatNaira(plan.price)}</span>
                 </div>
-              )
-            })}
+                <div className="space-y-2 mb-6">
+                  {items.map(item => (
+                    <div key={item} className={isTop ? 'check-item-dark' : 'check-item'}>
+                      <span className="check">✓</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/auth/signup"
+                  className={`block text-center py-2.5 rounded-xl font-bold text-sm transition-all ${
+                    isTop ? 'bg-gradient-teal-coral text-white hover:opacity-90' : 'bg-midnight-100 text-midnight-700 hover:bg-midnight-200'
+                  }`}>
+                  Get {plan.name} →
+                </Link>
+              </div>
+            ))}
           </div>
 
           <p className="text-center text-white/30 text-sm mt-6">
-            Need custom pricing for a large agency or corporate client?{' '}
+            Need custom pricing for a large agency?{' '}
             <Link href="/contact" className="text-teal hover:underline">Contact us</Link>
           </p>
 
           {/* Divider */}
           <div className="neon-line my-16" />
 
-          {/* Brand Monthly plans */}
+          {/* Business / Brand Monthly */}
           <div className="text-center mb-10">
             <div className="section-label-dark mb-4">For Brands &amp; Businesses</div>
-            <h3 className="font-display font-black text-2xl sm:text-3xl text-white mb-3">Brand Monthly Plans</h3>
-            <p className="text-white/50 max-w-lg mx-auto">Recurring monthly subscription for brands, corporates, and agencies running unlimited events. Cancel any time.</p>
+            <h3 className="font-display font-black text-2xl sm:text-3xl text-white mb-3">Business Monthly Plans</h3>
+            <p className="text-white/50 max-w-xl mx-auto">
+              Permanent QR code + rolling gallery for restaurants, clubs, brands &amp; agencies. Your customers upload content every visit — our AI turns it into ready-to-post TikTok/IG reels automatically.
+            </p>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-5">
+          <div className="grid sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
             {([
               {
-                tier: BRAND_MONTHLY.starter,
-                features: ['Unlimited events', '300 uploads per event', 'Bulk download', 'Live slideshow', 'Priority support'],
+                plan: BUSINESS_PLANS.activation,
+                items: ['2,000 uploads per month', 'Permanent QR + rolling gallery', 'Active while subscribed', 'Good quality + AI moderation', 'Basic AI reel generation ✓', 'Live slideshow ✓', 'Bulk download ✓'],
                 featured: false,
               },
               {
-                tier: BRAND_MONTHLY.growth,
-                features: ['Unlimited events', '600 uploads per event', 'Bulk download', 'Live slideshow', 'White-label branding', 'Priority support'],
+                plan: BUSINESS_PLANS.tycoon,
+                items: ['Unlimited uploads', 'Permanent QR + rolling gallery', 'Active while subscribed', 'High quality + AI moderation', 'Advanced AI reel generation ✓', 'Live slideshow ✓', 'Bulk download ✓'],
                 featured: true,
               },
-              {
-                tier: BRAND_MONTHLY.enterprise,
-                features: ['Unlimited events', 'Unlimited uploads', 'Bulk download', 'Live slideshow + AI reel', 'White-label branding', 'Dedicated account manager'],
-                featured: false,
-              },
-            ]).map(({ tier, features, featured }) => (
-              <div key={tier.id} className={`pricing-card ${featured ? 'featured' : ''} relative`}>
+            ]).map(({ plan, items, featured }) => (
+              <div key={plan.id} className={`pricing-card ${featured ? 'featured' : ''} relative`}>
                 {featured && (
                   <div className="absolute top-4 right-4">
                     <span className="badge-new">Popular</span>
                   </div>
                 )}
-                <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${featured ? 'text-teal' : 'text-midnight-400'}`}>{tier.name}</p>
+                <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${featured ? 'text-teal' : 'text-midnight-400'}`}>{plan.name}</p>
                 <div className="flex items-baseline gap-1 mb-0.5">
-                  <span className={`font-display font-black text-3xl ${featured ? 'text-white' : 'text-midnight-900'}`}>{formatNaira(tier.price)}</span>
+                  <span className={`font-display font-black text-3xl ${featured ? 'text-white' : 'text-midnight-900'}`}>{formatNaira(plan.price)}</span>
                   <span className={`text-sm ${featured ? 'text-white/50' : 'text-midnight-400'}`}>/mo</span>
                 </div>
                 <p className={`text-xs mb-5 ${featured ? 'text-white/40' : 'text-midnight-400'}`}>billed monthly · cancel any time</p>
                 <div className="space-y-2 mb-6">
-                  {features.map(item => (
+                  {items.map(item => (
                     <div key={item} className={featured ? 'check-item-dark' : 'check-item'}>
                       <span className="check">✓</span>
                       <span>{item}</span>
@@ -504,7 +525,7 @@ export default function HomePage() {
                       ? 'bg-gradient-teal-coral text-white hover:opacity-90 shadow-teal'
                       : 'bg-midnight-100 text-midnight-700 hover:bg-midnight-200'
                   }`}>
-                  Get {tier.name} →
+                  Get {plan.name} →
                 </Link>
               </div>
             ))}

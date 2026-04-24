@@ -57,20 +57,20 @@ export default function CreateEventForm({ userId, planType }: Props) {
       id: 'free',
       label: PLANS.free.name,
       price: '₦0',
-      uploads: `${PLANS.free.uploads} uploads · 24-hour page`,
+      uploads: `${PLANS.free.uploads} uploads · 24-hr page`,
     },
     {
       id: 'flex',
       label: PLANS.flex.name,
       price: `₦${PLANS.flex.price.toLocaleString('en-NG')}`,
-      uploads: `${PLANS.flex.uploads} uploads · 7-day page`,
+      uploads: `${PLANS.flex.uploads} uploads · 1-month page`,
       highlight: true,
     },
     {
       id: 'pro',
       label: PLANS.pro.name,
       price: `₦${PLANS.pro.price.toLocaleString('en-NG')}`,
-      uploads: `${PLANS.pro.uploads} uploads · 30-day page`,
+      uploads: `Unlimited uploads · 3-month page`,
     },
   ]
 
