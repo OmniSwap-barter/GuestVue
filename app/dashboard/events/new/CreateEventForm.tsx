@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PLANS } from '@/lib/pricing'
+import { createClient } from '@/lib/supabase/client'
 
 interface Props {
   userId: string
@@ -25,9 +26,18 @@ export default function CreateEventForm({ userId, planType }: Props) {
     setLoading(true)
     setError('')
 
+    // Get the browser session JWT and send it in the Authorization header.
+    // This bypasses server-side cookie reading entirely, which is unreliable
+    // in Next.js API routes when using @supabase/ssr.
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+
     const res = await fetch('/api/events', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+      },
       body: JSON.stringify({
         name,
         event_date: eventDate || null,

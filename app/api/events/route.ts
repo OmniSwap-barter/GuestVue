@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient_server, createServerUserClient } from '@/lib/supabase/server'
+import { createServerClient_server, createServerUserClient, createUserAuthClient, getServerAccessToken } from '@/lib/supabase/server'
 import { PLANS } from '@/lib/pricing'
 import QRCode from 'qrcode'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
@@ -25,7 +25,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const db = await createServerUserClient()
+    // Prefer the JWT sent explicitly in the Authorization header (from the browser client).
+    // Fall back to cookie-based token reading for other callers.
+    const authHeader = req.headers.get('authorization')
+    const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+    const token = headerToken ?? await getServerAccessToken()
+    const db = token ? createUserAuthClient(token) : (await createServerUserClient())
 
     const body = await req.json()
     const { name, event_date, hashtag, plan } = body as {
