@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Database } from '@/types/database'
+import { createClient } from '@/lib/supabase/client'
+import ReelBuilderPanel from './ReelBuilderPanel'
 
 type Event = Database['public']['Tables']['events']['Row']
 type Upload = Database['public']['Tables']['uploads']['Row']
@@ -19,7 +21,8 @@ type MediaFilter = 'all' | 'photos' | 'videos'
 export default function EventDetailClient({ event, initialUploads }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<TabId>('overview')
-  const [uploads] = useState<Upload[]>(initialUploads)
+  const [uploads, setUploads] = useState<Upload[]>(initialUploads)
+  const [uploadCount, setUploadCount] = useState(event.upload_count)
   const [copied, setCopied] = useState(false)
 
   // Gallery selection & filter
@@ -31,17 +34,31 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
   const [slideIdx, setSlideIdx] = useState(0)
   const slideTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Reel
-  const [reelStatus, setReelStatus] = useState<'idle' | 'generating' | 'done' | 'error'>('idle')
-  const [reelUrl, setReelUrl] = useState<string | null>(null)
+  // (Reel state lives in ReelBuilderPanel)
+
+  // ─── Realtime sync ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase.channel('dashboard-event-' + event.id)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'uploads',
+        filter: `event_id=eq.${event.id}`,
+      }, (payload) => {
+        setUploads(prev => [payload.new as Upload, ...prev])
+        setUploadCount(prev => prev + 1)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [event.id])
 
   const guestUrl = event.gallery_url || `${typeof window !== 'undefined' ? window.location.origin : ''}/e/${event.id}`
-  const pct = Math.round((event.upload_count / event.upload_limit) * 100)
+  const pct = Math.round((uploadCount / event.upload_limit) * 100)
   const photos = uploads.filter(u => u.type === 'photo')
   const videos = uploads.filter(u => u.type === 'video')
 
   const planSupportsSlideshow = event.plan === 'flex' || event.plan === 'pro'
-  const planSupportsReel = event.plan === 'pro'
   const planSupportsBulkDownload = event.plan === 'flex' || event.plan === 'pro'
 
   // Filtered uploads for gallery
@@ -76,12 +93,14 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
 
   // ─── Download helpers ────────────────────────────────────────────────────
   function downloadFile(url: string, filename: string) {
+    // Route through our proxy so cross-origin R2 files download instead of opening
+    const proxyUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`
     const a = document.createElement('a')
-    a.href = url
+    a.href = proxyUrl
     a.download = filename
-    a.target = '_blank'
-    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
   }
 
   function downloadSelected() {
@@ -147,26 +166,11 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
     return () => { if (slideTimer.current) clearInterval(slideTimer.current) }
   }, [tab, slideshowImages.length, planSupportsSlideshow])
 
-  // ─── AI Reel ─────────────────────────────────────────────────────────────
-  async function generateReel() {
-    setReelStatus('generating')
-    try {
-      const res = await fetch(`/api/events/${event.id}/generate-reel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (!res.ok) throw new Error('Reel generation failed')
-      const data = await res.json()
-      setReelUrl(data.reel?.output_url || null)
-      setReelStatus('done')
-    } catch {
-      setReelStatus('error')
-    }
-  }
+  // AI Reel state is now handled by ReelBuilderPanel
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'gallery', label: `Gallery (${uploads.length})` },
+    { id: 'gallery', label: `Gallery (${uploadCount})` },
     { id: 'slideshow', label: 'Slideshow' },
     { id: 'reel', label: 'AI Reel' },
     { id: 'embed', label: 'Photo Wall' },
@@ -281,7 +285,7 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
             {[
               { label: 'Photos', value: photos.length, icon: '📸' },
               { label: 'Videos', value: videos.length, icon: '🎬' },
-              { label: 'Uploads used', value: `${event.upload_count}/${event.upload_limit}`, icon: '📊' },
+              { label: 'Uploads used', value: `${uploadCount}/${event.upload_limit}`, icon: '📊' },
               { label: 'Capacity', value: `${pct}%`, icon: '💾' },
             ].map(s => (
               <div key={s.label} className="bg-white rounded-2xl border border-slate-100 p-4">
@@ -296,7 +300,7 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
           <div className="bg-white rounded-2xl border border-slate-100 p-5">
             <div className="flex justify-between text-sm text-slate-500 mb-2">
               <span>Upload capacity</span>
-              <span>{event.upload_count.toLocaleString()} / {event.upload_limit === 999999 ? '∞' : event.upload_limit.toLocaleString()}</span>
+              <span>{uploadCount.toLocaleString()} / {event.upload_limit === 999999 ? '∞' : event.upload_limit.toLocaleString()}</span>
             </div>
             <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
               <div className={`h-full rounded-full transition-all ${pct > 90 ? 'bg-[#E8735C]' : 'bg-[#0A4F6B]'}`}
@@ -533,70 +537,10 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
 
       {/* ── AI REEL ──────────────────────────────────────────────────────── */}
       {tab === 'reel' && (
-        <div className="bg-white rounded-2xl border border-slate-100 p-6">
-          <div className="text-center mb-6">
-            <div className="text-5xl mb-4">🎬</div>
-            <h2 className="font-bold text-xl text-slate-900 mb-2">AI Highlight Reel</h2>
-            <p className="text-sm text-slate-500 max-w-md mx-auto">
-              Automatically generate a cinematic short video from your event photos — ready for Instagram Reels or TikTok.
-            </p>
-          </div>
-
-          {!planSupportsReel ? (
-            <div className="text-center">
-              <div className="rounded-2xl p-6 mb-5 max-w-sm mx-auto text-white relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #14B8A6 0%, #1E5AAF 50%, #E8735C 100%)' }}>
-                <p className="text-lg font-bold mb-2">Upgrade to Pro</p>
-                <p className="text-sm text-white/80 mb-1">Get an AI-generated highlight reel from your guest photos.</p>
-                <p className="text-xs text-white/60">Share-ready for Instagram Reels and TikTok.</p>
-              </div>
-              <Link href="/pricing" className="inline-block bg-[#0A4F6B] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm">
-                Upgrade to Pro — ₦49,999 →
-              </Link>
-            </div>
-          ) : (
-            <div className="text-center">
-              {reelStatus === 'idle' && (
-                <button
-                  onClick={generateReel}
-                  disabled={photos.length < 3}
-                  className="bg-[#0A4F6B] disabled:opacity-40 text-white font-bold px-8 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm"
-                >
-                  {photos.length < 3 ? 'Need at least 3 photos' : 'Generate AI Reel'}
-                </button>
-              )}
-              {reelStatus === 'generating' && (
-                <div>
-                  <div className="w-12 h-12 border-4 border-[#0A4F6B]/20 border-t-[#0A4F6B] rounded-full animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-slate-500">Generating your highlight reel…</p>
-                  <p className="text-xs text-slate-400 mt-1">This may take a few minutes.</p>
-                </div>
-              )}
-              {reelStatus === 'done' && (
-                <div>
-                  <div className="text-4xl mb-3">✅</div>
-                  <p className="font-semibold text-slate-900 mb-4">Your reel has been queued!</p>
-                  {reelUrl ? (
-                    <a
-                      href={reelUrl}
-                      download={`${event.name}-reel.mp4`}
-                      className="inline-block bg-[#14B8A6] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-all text-sm"
-                    >
-                      ↓ Download Reel
-                    </a>
-                  ) : (
-                    <p className="text-xs text-slate-400">Processing in the background — come back shortly to download.</p>
-                  )}
-                </div>
-              )}
-              {reelStatus === 'error' && (
-                <div>
-                  <p className="text-[#E8735C] text-sm mb-3">Reel generation failed. Please try again.</p>
-                  <button onClick={() => setReelStatus('idle')} className="text-sm text-[#0A4F6B] underline">Try again</button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <ReelBuilderPanel
+          event={{ id: event.id, name: event.name, plan: event.plan }}
+          photos={photos}
+        />
       )}
 
       {/* ── PHOTO WALL / EMBED ───────────────────────────────────────────── */}

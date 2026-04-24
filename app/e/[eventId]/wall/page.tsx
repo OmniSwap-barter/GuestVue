@@ -25,7 +25,7 @@ export default async function PhotoWallPage({ params }: Props) {
     .select('id, original_url, display_url, type, created_at')
     .eq('event_id', eventId)
     .eq('type', 'photo')
-    .eq('status', 'ready')
+    .in('status', ['ready', 'processing'])
     .order('created_at', { ascending: false })
     .limit(100)
 

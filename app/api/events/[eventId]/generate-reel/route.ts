@@ -7,19 +7,68 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
-  const { data: event } = await admin.from('events').select('*').eq('id', params.eventId).eq('host_id', user.id).single() as any
+  const { data: event } = await admin
+    .from('events')
+    .select('*')
+    .eq('id', params.eventId)
+    .eq('host_id', user.id)
+    .single() as any
   if (!event) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Insert reel job — 'type' is NOT NULL so must be provided
-  const { data: reel, error } = await admin.from('reels').insert({ event_id: params.eventId, type: 'highlight', status: 'queued' }).select().single() as any
+  // Parse optional builder options from request body
+  let uploadIds: string[] = []
+  let musicTrack: string | null = null
+  let removeWatermark = false
+  let logoUrl: string | null = null
+
+  try {
+    const body = await req.json()
+    uploadIds = Array.isArray(body.uploadIds) ? body.uploadIds : []
+    musicTrack = typeof body.musicTrack === 'string' ? body.musicTrack : null
+    removeWatermark = body.removeWatermark === true
+    logoUrl = typeof body.logoUrl === 'string' ? body.logoUrl : null
+  } catch {
+    // body is optional — defaults used
+  }
+
+  // type must be 'basic' or 'advanced' (check constraint)
+  const reelType = event.plan === 'pro' ? 'advanced' : 'basic'
+
+  const { data: reel, error } = await admin
+    .from('reels')
+    .insert({
+      event_id: params.eventId,
+      type: reelType,
+      status: 'queued',
+      upload_ids: uploadIds.length > 0 ? uploadIds : [],
+      music_track: musicTrack,
+      formats: {
+        remove_watermark: removeWatermark,
+        logo_url: logoUrl,
+      },
+    })
+    .select()
+    .single() as any
+
   if (error) return NextResponse.json({ error: 'Failed to queue reel' }, { status: 500 })
 
   // Dispatch to Railway worker
   if (process.env.RAILWAY_WORKER_URL && process.env.WORKER_SECRET) {
     fetch(`${process.env.RAILWAY_WORKER_URL}/jobs/generate-reel`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-worker-secret': process.env.WORKER_SECRET },
-      body: JSON.stringify({ reelId: reel.id, eventId: params.eventId, plan: event.plan }),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-worker-secret': process.env.WORKER_SECRET,
+      },
+      body: JSON.stringify({
+        reelId: reel.id,
+        eventId: params.eventId,
+        plan: event.plan,
+        uploadIds,
+        musicTrack,
+        removeWatermark,
+        logoUrl,
+      }),
     }).catch(err => console.warn('Worker reel dispatch failed:', err.message))
   }
 
