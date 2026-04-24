@@ -53,9 +53,25 @@ export default function CreateEventForm({ userId, planType }: Props) {
   }
 
   const planOptions: { id: EventPlan; label: string; price: string; uploads: string; highlight?: boolean }[] = [
-    { id: 'free', label: 'Free', price: '₦0', uploads: '50 uploads · 24hr page' },
-    { id: 'flex', label: 'Flex', price: '₦24,999', uploads: '500 uploads · 30-day page', highlight: true },
-    { id: 'pro', label: 'Pro', price: '₦59,999', uploads: 'Unlimited · 90-day page' },
+    {
+      id: 'free',
+      label: PLANS.free.name,
+      price: '₦0',
+      uploads: `${PLANS.free.uploads} uploads · 24-hour page`,
+    },
+    {
+      id: 'flex',
+      label: PLANS.flex.name,
+      price: `₦${PLANS.flex.price.toLocaleString('en-NG')}`,
+      uploads: `${PLANS.flex.uploads} uploads · 7-day page`,
+      highlight: true,
+    },
+    {
+      id: 'pro',
+      label: PLANS.pro.name,
+      price: `₦${PLANS.pro.price.toLocaleString('en-NG')}`,
+      uploads: `${PLANS.pro.uploads} uploads · 30-day page`,
+    },
   ]
 
   return (
