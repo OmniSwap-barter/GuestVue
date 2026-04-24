@@ -1,46 +1,95 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 60" fill="none">
   <defs>
-    <linearGradient id="gv-grad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#14B8A6"/>
-      <stop offset="55%" stop-color="#1E5AAF"/>
-      <stop offset="100%" stop-color="#0A4F6B"/>
+    <!-- Teal-to-coral gradient for shutter blades -->
+    <linearGradient id="shutter-grad" x1="0" y1="0" x2="60" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#14B8A6"/>
+      <stop offset="100%" stop-color="#E8735C"/>
     </linearGradient>
-    <linearGradient id="gv-text-grad" x1="96" y1="10" x2="120" y2="30" gradientUnits="userSpaceOnUse">
+    <!-- Teal solid for top-left QR elements -->
+    <linearGradient id="teal-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22D3C8"/>
+      <stop offset="100%" stop-color="#14B8A6"/>
+    </linearGradient>
+    <!-- Coral solid for top-right QR elements -->
+    <linearGradient id="coral-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F4836A"/>
+      <stop offset="100%" stop-color="#E8735C"/>
+    </linearGradient>
+    <!-- Text gradient for "Vue" -->
+    <linearGradient id="text-grad" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#14B8A6"/>
-      <stop offset="100%" stop-color="#1E5AAF"/>
+      <stop offset="100%" stop-color="#E8735C"/>
     </linearGradient>
   </defs>
 
-  <!-- Icon background pill -->
-  <rect width="40" height="40" rx="10" fill="url(#gv-grad)"/>
+  <!-- ══ ICON MARK (60×60) ══ -->
 
-  <!-- QR corner: top-left -->
-  <rect x="6" y="6" width="11" height="11" rx="2.5" fill="white" opacity="0.95"/>
-  <rect x="8.5" y="8.5" width="6" height="6" rx="1.5" fill="url(#gv-grad)"/>
+  <!-- TOP-LEFT QR CORNER — teal -->
+  <!-- Outer square border -->
+  <rect x="2"  y="2"  width="20" height="20" rx="3.5" fill="none" stroke="url(#teal-grad)" stroke-width="3"/>
+  <!-- Inner filled square -->
+  <rect x="8"  y="8"  width="8"  height="8"  rx="1.5" fill="url(#teal-grad)"/>
 
-  <!-- QR corner: top-right -->
-  <rect x="23" y="6" width="11" height="11" rx="2.5" fill="white" opacity="0.95"/>
-  <rect x="25.5" y="8.5" width="6" height="6" rx="1.5" fill="url(#gv-grad)"/>
+  <!-- TOP-RIGHT QR CORNER — coral -->
+  <rect x="38" y="2"  width="20" height="20" rx="3.5" fill="none" stroke="url(#coral-grad)" stroke-width="3"/>
+  <rect x="44" y="8"  width="8"  height="8"  rx="1.5" fill="url(#coral-grad)"/>
 
-  <!-- QR corner: bottom-left -->
-  <rect x="6" y="23" width="11" height="11" rx="2.5" fill="white" opacity="0.95"/>
-  <rect x="8.5" y="25.5" width="6" height="6" rx="1.5" fill="url(#gv-grad)"/>
+  <!-- BOTTOM-LEFT QR CORNER — teal -->
+  <rect x="2"  y="38" width="20" height="20" rx="3.5" fill="none" stroke="url(#teal-grad)" stroke-width="3"/>
+  <rect x="8"  y="44" width="8"  height="8"  rx="1.5" fill="url(#teal-grad)"/>
 
-  <!-- Camera aperture: bottom-right quadrant -->
-  <circle cx="28.5" cy="28.5" r="6.5" fill="white" opacity="0.92"/>
-  <circle cx="28.5" cy="28.5" r="4.5" fill="url(#gv-grad)"/>
-  <circle cx="28.5" cy="28.5" r="2.1" fill="white"/>
-  <circle cx="27.3" cy="27.3" r="0.6" fill="white" opacity="0.8"/>
+  <!-- QR DATA DOTS — left column (teal) -->
+  <rect x="2"  y="26" width="5" height="5" rx="1" fill="url(#teal-grad)" opacity="0.85"/>
+  <rect x="2"  y="33" width="5" height="5" rx="1" fill="url(#teal-grad)" opacity="0.55"/>
+  <rect x="9"  y="26" width="3" height="3" rx="0.7" fill="url(#teal-grad)" opacity="0.45"/>
 
-  <!-- QR data cells in middle zone -->
-  <rect x="19" y="19" width="2.5" height="2.5" rx="0.7" fill="white" opacity="0.75"/>
-  <rect x="18" y="23.5" width="2" height="2" rx="0.5" fill="white" opacity="0.5"/>
-  <rect x="22.5" y="19" width="2" height="2" rx="0.5" fill="white" opacity="0.5"/>
+  <!-- QR DATA DOTS — right column (coral) -->
+  <rect x="53" y="26" width="5" height="5" rx="1" fill="url(#coral-grad)" opacity="0.85"/>
+  <rect x="53" y="33" width="5" height="5" rx="1" fill="url(#coral-grad)" opacity="0.55"/>
+  <rect x="46" y="26" width="3" height="3" rx="0.7" fill="url(#coral-grad)" opacity="0.45"/>
 
-  <!-- Wordmark -->
-  <text x="49" y="25" font-family="'Inter','SF Pro Display','Segoe UI',system-ui,sans-serif" font-weight="800" font-size="15.5" letter-spacing="-0.4" fill="#0A4F6B">Guest</text>
-  <text x="97" y="25" font-family="'Inter','SF Pro Display','Segoe UI',system-ui,sans-serif" font-weight="800" font-size="15.5" letter-spacing="-0.4" fill="url(#gv-text-grad)">Vue</text>
+  <!-- QR DATA DOTS — bottom row (mixed) -->
+  <rect x="26" y="53" width="5" height="5" rx="1" fill="url(#teal-grad)" opacity="0.7"/>
+  <rect x="33" y="53" width="5" height="5" rx="1" fill="url(#coral-grad)" opacity="0.7"/>
+  <rect x="26" y="46" width="3" height="3" rx="0.7" fill="url(#teal-grad)" opacity="0.4"/>
 
-  <!-- Tagline -->
-  <text x="49" y="34.5" font-family="'Inter','SF Pro Display','Segoe UI',system-ui,sans-serif" font-weight="500" font-size="6" letter-spacing="1" fill="#14B8A6">EVERY MOMENT. ONE QR CODE.</text>
+  <!-- CAMERA SHUTTER / APERTURE — centre -->
+  <!-- Shutter ring background -->
+  <circle cx="30" cy="30" r="18" fill="url(#shutter-grad)" opacity="0.18"/>
+
+  <!-- 6 aperture blades using clip rotation trick -->
+  <!-- Blade 1 — 0° -->
+  <path d="M30 12 L38 26 L22 26 Z" fill="url(#shutter-grad)" opacity="0.9"/>
+  <!-- Blade 2 — 60° -->
+  <path d="M30 12 L44 22 L36 36 Z" fill="url(#shutter-grad)" opacity="0.78" transform="rotate(60 30 30)"/>
+  <!-- Blade 3 — 120° -->
+  <path d="M30 12 L44 22 L36 36 Z" fill="url(#shutter-grad)" opacity="0.66" transform="rotate(120 30 30)"/>
+  <!-- Blade 4 — 180° -->
+  <path d="M30 12 L44 22 L36 36 Z" fill="url(#shutter-grad)" opacity="0.9" transform="rotate(180 30 30)"/>
+  <!-- Blade 5 — 240° -->
+  <path d="M30 12 L44 22 L36 36 Z" fill="url(#shutter-grad)" opacity="0.78" transform="rotate(240 30 30)"/>
+  <!-- Blade 6 — 300° -->
+  <path d="M30 12 L44 22 L36 36 Z" fill="url(#shutter-grad)" opacity="0.66" transform="rotate(300 30 30)"/>
+
+  <!-- Dark centre hole -->
+  <circle cx="30" cy="30" r="9" fill="#0f172a"/>
+  <!-- Outer ring stroke for definition -->
+  <circle cx="30" cy="30" r="18" fill="none" stroke="url(#shutter-grad)" stroke-width="2" opacity="0.6"/>
+
+  <!-- ══ WORDMARK ══ -->
+  <!-- "Guest" in dark navy -->
+  <text x="70" y="36"
+    font-family="'Inter','SF Pro Display','Segoe UI',system-ui,sans-serif"
+    font-weight="800"
+    font-size="22"
+    letter-spacing="-0.5"
+    fill="#0A4F6B">Guest</text>
+
+  <!-- "Vue" in teal-to-coral gradient -->
+  <text x="140" y="36"
+    font-family="'Inter','SF Pro Display','Segoe UI',system-ui,sans-serif"
+    font-weight="800"
+    font-size="22"
+    letter-spacing="-0.5"
+    fill="url(#text-grad)">Vue</text>
 </svg>
