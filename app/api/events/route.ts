@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient_server, createServerUserClient, createUserAuthClient, getServerAccessToken } from '@/lib/supabase/server'
+import { createServerClient_server, createServerUserClient, createUserAuthClient, getServerAccessToken, createAdminClient } from '@/lib/supabase/server'
 import { PLANS } from '@/lib/pricing'
 import QRCode from 'qrcode'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
@@ -105,7 +105,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Insert event ──────────────────────────────────────────────────────────
-    const { data: event, error: insertError } = await db
+    // Use admin client (bypasses RLS) — user identity is already verified above via
+    // supabase.auth.getUser(). Using the user-JWT client for inserts is fragile
+    // because the JWT in the Authorization header can diverge from the cookie-based
+    // session, causing auth.uid() mismatches that trigger RLS violations.
+    const admin = createAdminClient()
+    const { data: event, error: insertError } = await admin
       .from('events')
       .insert({
         id: eventId,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 
 interface Upload {
@@ -33,12 +33,15 @@ const MUSIC_TRACKS = [
 type ReelStatus = 'idle' | 'uploading_logo' | 'generating' | 'queued' | 'error'
 
 export default function ReelBuilderPanel({ event, photos }: Props) {
-  const planSupportsReel = event.plan === 'pro'
+  const [workerOnline, setWorkerOnline] = useState(false)
+  // Both Flex and Pro support reel generation (Flex = basic, Pro = advanced)
+  const planSupportsReel = event.plan === 'flex' || event.plan === 'pro'
 
   // Media selection (default: all photos selected)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(photos.map(p => p.id)))
   const [musicTrack, setMusicTrack] = useState<string>('afrobeats_upbeat')
-  const [removeWatermark] = useState(false)  // paid toggle — disabled until payment
+  const [removeWatermark, setRemoveWatermark] = useState(false)
+  const [watermarkPurchasing, setWatermarkPurchasing] = useState(false)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
@@ -56,13 +59,18 @@ export default function ReelBuilderPanel({ event, photos }: Props) {
           Automatically generate a cinematic short video from your event photos — ready for Instagram Reels or TikTok.
         </p>
         <div className="rounded-2xl p-6 mb-5 max-w-sm mx-auto text-white" style={{ background: 'linear-gradient(135deg, #14B8A6 0%, #1E5AAF 50%, #E8735C 100%)' }}>
-          <p className="text-lg font-bold mb-2">Upgrade to Pro</p>
+          <p className="text-lg font-bold mb-2">Upgrade to Flex or Pro</p>
           <p className="text-sm text-white/80 mb-1">Get an AI-generated highlight reel from your guest photos.</p>
           <p className="text-xs text-white/60">Share-ready for Instagram Reels and TikTok.</p>
         </div>
-        <Link href="/pricing" className="inline-block bg-[#0A4F6B] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm">
-          Upgrade to Pro — ₦49,999 →
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Link href="/pricing" className="inline-block bg-[#0A4F6B] text-white font-bold px-6 py-3 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm">
+            Upgrade to Flex — ₦19,999 →
+          </Link>
+          <Link href="/pricing" className="inline-block bg-gradient-to-r from-[#1E5AAF] to-[#E8735C] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-all text-sm">
+            Upgrade to Pro — ₦49,999 →
+          </Link>
+        </div>
       </div>
     )
   }
@@ -78,11 +86,40 @@ export default function ReelBuilderPanel({ event, photos }: Props) {
   function selectAll() { setSelectedIds(new Set(photos.map(p => p.id))) }
   function deselectAll() { setSelectedIds(new Set()) }
 
+  async function handleWatermarkPurchase() {
+    setWatermarkPurchasing(true)
+    try {
+      const res = await fetch(`/api/events/${event.id}/addon`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addonId: 'remove_watermark', priceKobo: 500000 }),
+      })
+      const data = await res.json()
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl
+      } else {
+        alert(data.error || 'Could not initiate payment. Please try again.')
+        setWatermarkPurchasing(false)
+      }
+    } catch {
+      alert('Something went wrong. Please try again.')
+      setWatermarkPurchasing(false)
+    }
+  }
+
+  // Check URL for ?watermark_removed=1 on return from Paystack
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('watermark_removed') === '1') {
+      setRemoveWatermark(true)
+    }
+  }, [])
+
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Logo must be under 2 MB')
+    if (file.size > 3 * 1024 * 1024) {
+      alert('Logo must be under 3 MB')
       return
     }
     setLogoFile(file)
@@ -139,6 +176,7 @@ export default function ReelBuilderPanel({ event, photos }: Props) {
       if (!res.ok) throw new Error('Generation failed')
       const data = await res.json()
       setReelId(data.reel?.id ?? null)
+      setWorkerOnline(data.workerOnline === true)
       setStatus('queued')
     } catch {
       setStatus('error')
@@ -153,7 +191,9 @@ export default function ReelBuilderPanel({ event, photos }: Props) {
         <h3 className="font-bold text-slate-900 text-xl mb-2">Your reel is in the queue!</h3>
         <p className="text-sm text-slate-500 max-w-md mx-auto mb-2">
           We&apos;re assembling your highlight reel with {selectedIds.size} photos and your chosen music.
-          This usually takes 5–15 minutes.
+          {workerOnline
+            ? ' This usually takes 5–15 minutes.'
+            : ' Processing is queued and may take up to 30 minutes during peak times.'}
         </p>
         <p className="text-xs text-slate-400 mb-6">Come back to this tab to download once it&apos;s ready.</p>
         <button
@@ -299,7 +339,7 @@ export default function ReelBuilderPanel({ event, photos }: Props) {
               )}
               <div>
                 <p className="text-sm text-slate-600">Upload your brand logo</p>
-                <p className="text-xs text-slate-400 mt-0.5">PNG or JPG, max 2 MB. Will appear in the corner of your reel.</p>
+                <p className="text-xs text-slate-400 mt-0.5">PNG or JPG, max 3 MB. Will appear in the corner of your reel.</p>
                 {!logoPreview && (
                   <button
                     type="button"
@@ -321,21 +361,38 @@ export default function ReelBuilderPanel({ event, photos }: Props) {
           </div>
 
           {/* GuestVue watermark toggle */}
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100">
+          <div className={`flex items-start gap-3 p-4 rounded-xl border transition-all ${
+            removeWatermark
+              ? 'bg-[#14B8A6]/5 border-[#14B8A6]/30'
+              : 'bg-slate-50 border-slate-100'
+          }`}>
             <div className="flex-1">
               <p className="text-sm font-semibold text-slate-700">
                 &ldquo;Powered by GuestVue&rdquo; watermark
               </p>
               <p className="text-xs text-slate-400 mt-0.5">
-                A small GuestVue credit appears on the reel. Remove it by purchasing the watermark removal add-on.
+                {removeWatermark
+                  ? 'Watermark removal is active. Your reel will be clean and unbranded.'
+                  : 'A small GuestVue credit appears on the reel. Remove it for ₦5,000.'}
               </p>
             </div>
-            <Link
-              href={`/dashboard/events/${event.id}?tab=addons`}
-              className="flex-shrink-0 text-xs font-bold text-[#E8735C] border border-[#E8735C]/30 px-3 py-1.5 rounded-lg hover:bg-[#E8735C]/5 transition-all"
-            >
-              Remove — ₦5,000
-            </Link>
+            {removeWatermark ? (
+              <span className="flex-shrink-0 text-xs font-bold text-[#14B8A6] flex items-center gap-1 mt-0.5">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Removed
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleWatermarkPurchase}
+                disabled={watermarkPurchasing}
+                className="flex-shrink-0 text-xs font-bold text-[#E8735C] border border-[#E8735C]/30 px-3 py-1.5 rounded-lg hover:bg-[#E8735C]/5 transition-all disabled:opacity-60 disabled:cursor-wait"
+              >
+                {watermarkPurchasing ? 'Redirecting…' : 'Remove — ₦5,000'}
+              </button>
+            )}
           </div>
         </div>
       </div>

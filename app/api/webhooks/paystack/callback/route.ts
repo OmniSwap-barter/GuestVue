@@ -70,6 +70,13 @@ export async function GET(req: NextRequest) {
           await supabase.from('events').update({ plan: 'pro', status: 'active', upload_limit: 999999 }).eq('id', resolvedEventId)
           break
 
+        case 'remove_watermark':
+          // No DB schema change needed — the reel builder checks for this URL param
+          // on return and sets removeWatermark=true in state before generation.
+          return NextResponse.redirect(
+            `${appUrl}/dashboard/events/${resolvedEventId}?watermark_removed=1&payment=success`
+          )
+
         // ai_reel and photo_wall don't change DB schema — just unlock the feature;
         // for now just mark them as success and redirect.
         default:

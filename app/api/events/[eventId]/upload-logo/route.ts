@@ -16,7 +16,13 @@ function getR2Client() {
   })
 }
 
-export async function POST(req: NextRequest, { params }: { params: { eventId: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ eventId: string }> }
+) {
+  // Next.js 15: params is async — must await
+  const { eventId } = await params
+
   const supabase = await createServerClient_server()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -27,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
   const { data: event } = await admin
     .from('events')
     .select('id')
-    .eq('id', params.eventId)
+    .eq('id', eventId)
     .eq('host_id', user.id)
     .single()
 
@@ -37,8 +43,8 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
   const file = formData.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
-  if (file.size > 2 * 1024 * 1024) {
-    return NextResponse.json({ error: 'Logo must be under 2 MB' }, { status: 400 })
+  if (file.size > 3 * 1024 * 1024) {
+    return NextResponse.json({ error: 'Logo must be under 3 MB' }, { status: 400 })
   }
 
   const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
@@ -47,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
   }
 
   const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-  const key = `logos/${params.eventId}/${randomUUID()}.${ext}`
+  const key = `logos/${eventId}/${randomUUID()}.${ext}`
   const bucket = process.env.R2_BUCKET_NAME || 'claude-guestvue'
 
   const buffer = Buffer.from(await file.arrayBuffer())

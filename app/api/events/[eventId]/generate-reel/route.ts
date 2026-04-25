@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
 
-export async function POST(req: NextRequest, { params }: { params: { eventId: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ eventId: string }> }
+) {
+  // Next.js 15: params is async — must await
+  const { eventId } = await params
+
   const supabase = await createServerClient_server()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -10,10 +16,15 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
   const { data: event } = await admin
     .from('events')
     .select('*')
-    .eq('id', params.eventId)
+    .eq('id', eventId)
     .eq('host_id', user.id)
     .single() as any
-  if (!event) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+
+  // Only paid plans can generate reels
+  if (event.plan === 'free') {
+    return NextResponse.json({ error: 'Reel generation requires Flex or Pro plan.' }, { status: 403 })
+  }
 
   // Parse optional builder options from request body
   let uploadIds: string[] = []
@@ -37,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
   const { data: reel, error } = await admin
     .from('reels')
     .insert({
-      event_id: params.eventId,
+      event_id: eventId,
       type: reelType,
       status: 'queued',
       upload_ids: uploadIds.length > 0 ? uploadIds : [],
@@ -62,7 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
       },
       body: JSON.stringify({
         reelId: reel.id,
-        eventId: params.eventId,
+        eventId,
         plan: event.plan,
         uploadIds,
         musicTrack,
@@ -72,5 +83,5 @@ export async function POST(req: NextRequest, { params }: { params: { eventId: st
     }).catch(err => console.warn('Worker reel dispatch failed:', err.message))
   }
 
-  return NextResponse.json({ reel }, { status: 201 })
+  return NextResponse.json({ reel, workerOnline: !!(process.env.RAILWAY_WORKER_URL && process.env.WORKER_SECRET) }, { status: 201 })
 }

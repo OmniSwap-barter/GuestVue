@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient_server } from '@/lib/supabase/server'
+import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
 
 const ADDON_LABELS: Record<string, string> = {
   uploads_100: '+100 Upload Slots',
@@ -7,6 +7,7 @@ const ADDON_LABELS: Record<string, string> = {
   storage_extension_30d: '+30 Days Storage',
   ai_reel: 'AI Highlight Reel',
   photo_wall: 'Live Photo Wall',
+  remove_watermark: 'Remove GuestVue Watermark',
   upgrade_flex: 'Upgrade to Flex Plan',
   upgrade_pro: 'Upgrade to Pro Plan',
 }
@@ -27,8 +28,9 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid addon request' }, { status: 400 })
     }
 
-    // Verify event ownership
-    const { data: event } = await supabase
+    // Verify event ownership — use admin client to bypass RLS reliably
+    const admin = createAdminClient()
+    const { data: event } = await admin
       .from('events')
       .select('id, name, host_id')
       .eq('id', eventId)

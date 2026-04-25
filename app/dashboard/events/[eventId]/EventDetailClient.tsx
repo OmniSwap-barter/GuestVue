@@ -1,6 +1,19 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+
+// ── Locale-independent date formatter (avoids SSR/client hydration mismatch) ──
+// toLocaleDateString('en-NG', {...}) formats differently in Node.js vs browsers
+// (Node uses "24 Jul 2026 at 06:01", browsers use "24 Jul 2026, 06:01").
+function fmtDate(dateStr: string, showTime = false): string {
+  const d = new Date(dateStr)
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const base = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
+  if (!showTime) return base
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${base}, ${h}:${m}`
+}
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Database } from '@/types/database'
@@ -22,7 +35,11 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<TabId>('overview')
   const [uploads, setUploads] = useState<Upload[]>(initialUploads)
-  const [uploadCount, setUploadCount] = useState(event.upload_count)
+  // Seed from either the DB counter OR the actual length of loaded uploads —
+  // whichever is larger — so the tab label is never stale on first render.
+  const [uploadCount, setUploadCount] = useState(
+    Math.max(event.upload_count ?? 0, initialUploads.length)
+  )
   const [copied, setCopied] = useState(false)
 
   // Gallery selection & filter
@@ -114,25 +131,56 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
   }
 
   async function downloadAll() {
+    if (downloadingAll) return
+    setDownloadingAll(true)
+    setDownloadProgress(null)
+
     try {
       const res = await fetch(`/api/events/${event.id}/download-zip`)
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
-      ;(data.urls as { url: string; type: string }[]).forEach((item, i) => {
+      const items = data.urls as { url: string; filename: string; type: string }[]
+
+      setDownloadProgress({ done: 0, total: items.length })
+
+      // Stagger downloads to avoid browser tab/popup blocking
+      items.forEach((item, i) => {
         setTimeout(() => {
-          downloadFile(item.url, `${event.name}-${i + 1}.${item.type === 'video' ? 'mp4' : 'jpg'}`)
-        }, i * 300)
+          const a = document.createElement('a')
+          a.href = item.url
+          a.download = item.filename
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          setDownloadProgress(prev => prev ? { ...prev, done: i + 1 } : null)
+          if (i === items.length - 1) {
+            setTimeout(() => {
+              setDownloadingAll(false)
+              setDownloadProgress(null)
+            }, 1000)
+          }
+        }, i * 400)
       })
     } catch {
-      // Fall back to direct download
+      // Fall back to proxy download
+      setDownloadProgress({ done: 0, total: uploads.length })
       uploads.forEach((u, i) => {
         setTimeout(() => {
           const url = u.display_url || u.original_url
-          if (url) downloadFile(url, `${event.name}-${i + 1}.${u.type === 'video' ? 'mp4' : 'jpg'}`)
-        }, i * 300)
+          const filename = `${event.name}-${String(i + 1).padStart(3, '0')}.${u.type === 'video' ? 'mp4' : 'jpg'}`
+          if (url) downloadFile(url, filename)
+          setDownloadProgress(prev => prev ? { ...prev, done: i + 1 } : null)
+          if (i === uploads.length - 1) {
+            setTimeout(() => { setDownloadingAll(false); setDownloadProgress(null) }, 1000)
+          }
+        }, i * 400)
       })
     }
   }
+
+  // ─── Download All ────────────────────────────────────────────────────────
+  const [downloadingAll, setDownloadingAll] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number } | null>(null)
 
   // ─── Pay Now ─────────────────────────────────────────────────────────────
   const [payingNow, setPayingNow] = useState(false)
@@ -316,13 +364,13 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
               {event.page_expires_at && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Guest upload page closes</span>
-                  <span className="font-medium text-slate-700">{new Date(event.page_expires_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="font-medium text-slate-700">{fmtDate(event.page_expires_at!, true)}</span>
                 </div>
               )}
               {event.storage_expires_at && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Files deleted after</span>
-                  <span className="font-medium text-slate-700">{new Date(event.storage_expires_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  <span className="font-medium text-slate-700">{fmtDate(event.storage_expires_at!)}</span>
                 </div>
               )}
             </div>
@@ -384,9 +432,12 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
                 {planSupportsBulkDownload ? (
                   <button
                     onClick={downloadAll}
-                    className="text-xs font-semibold text-[#0A4F6B] border border-[#0A4F6B]/30 px-3 py-1.5 rounded-lg hover:bg-[#0A4F6B]/5 transition-all"
+                    disabled={downloadingAll}
+                    className="text-xs font-semibold text-[#0A4F6B] border border-[#0A4F6B]/30 px-3 py-1.5 rounded-lg hover:bg-[#0A4F6B]/5 transition-all disabled:opacity-60"
                   >
-                    Download all ({uploads.length})
+                    {downloadingAll && downloadProgress
+                      ? `Downloading ${downloadProgress.done}/${downloadProgress.total}…`
+                      : `Download all (${uploads.length})`}
                   </button>
                 ) : (
                   <Link href="/pricing" className="text-xs font-semibold text-[#E8735C] hover:underline">
@@ -432,7 +483,8 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
                           <span className="text-white/40 text-xs">Video</span>
                         </div>
                       )}
-                      {upload.status === 'processing' && (
+                      {/* Only show "Processing" overlay when there's no displayable URL yet */}
+                      {upload.status === 'processing' && !upload.display_url && !upload.original_url && (
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                           <span className="text-white text-xs font-semibold">Processing…</span>
                         </div>
