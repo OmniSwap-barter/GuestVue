@@ -4,6 +4,7 @@ import { createServerClient_server, createAdminClient } from '@/lib/supabase/ser
 import { formatNaira, AFFILIATE } from '@/lib/pricing'
 import AffiliateCopyButton from './AffiliateCopyButton'
 import AffiliateBankForm from './AffiliateBankForm'
+import AffiliateJoinButton from './AffiliateJoinButton'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -147,12 +148,7 @@ export default async function AffiliatePage() {
             Hit {AFFILIATE.loyaltyThreshold} referrals and earn <strong>{Math.round(AFFILIATE.loyaltyRate * 100)}%</strong> forever.
           </p>
           {!affiliate ? (
-            <form action="/api/affiliate/join" method="POST">
-              <button type="submit"
-                className="bg-white text-ocean font-bold px-5 py-2.5 rounded-xl text-sm hover:scale-105 transition-all">
-                Join the Programme →
-              </button>
-            </form>
+            <AffiliateJoinButton />
           ) : (
             <AffiliateCopyButton link={affiliateLink || ''} />
           )}

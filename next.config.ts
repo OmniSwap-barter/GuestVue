@@ -4,6 +4,16 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  async redirects() {
+    return [
+      // /affiliate (legacy/dead route) → dashboard affiliate programme
+      {
+        source: '/affiliate',
+        destination: '/dashboard/affiliate',
+        permanent: false,
+      },
+    ]
+  },
   images: {
     remotePatterns: [
       {

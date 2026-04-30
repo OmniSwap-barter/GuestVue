@@ -182,6 +182,44 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
   const [downloadingAll, setDownloadingAll] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number } | null>(null)
 
+  // ─── Copy states for slideshow + wall links ─────────────────────────────
+  const [copiedSlideshow, setCopiedSlideshow] = useState(false)
+  const [copiedWall, setCopiedWall] = useState(false)
+
+  // ─── Settings: custom colour ─────────────────────────────────────────────
+  const [customColor, setCustomColor] = useState(event.custom_color || '#0A4F6B')
+  const [colorSaving, setColorSaving] = useState(false)
+  const [colorSaved, setColorSaved] = useState(false)
+
+  async function saveCustomColor() {
+    setColorSaving(true)
+    try {
+      const supabase = createClient()
+      await (supabase as any).from('events').update({ custom_color: customColor }).eq('id', event.id)
+      setColorSaved(true)
+      setTimeout(() => setColorSaved(false), 3000)
+    } finally {
+      setColorSaving(false)
+    }
+  }
+
+  // ─── Settings: delete event ──────────────────────────────────────────────
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDeleteEvent() {
+    setDeleting(true)
+    try {
+      const supabase = createClient()
+      await (supabase as any).from('events').delete().eq('id', event.id)
+      router.push('/dashboard')
+    } catch {
+      alert('Delete failed. Please try again.')
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
+
   // ─── Pay Now ─────────────────────────────────────────────────────────────
   const [payingNow, setPayingNow] = useState(false)
 
@@ -547,10 +585,12 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
                     onClick={() => {
                       const url = `${window.location.origin}/dashboard/events/${event.id}/slideshow`
                       navigator.clipboard.writeText(url)
+                      setCopiedSlideshow(true)
+                      setTimeout(() => setCopiedSlideshow(false), 2000)
                     }}
                     className="text-xs font-semibold text-slate-500 border border-slate-200 px-3 py-2 rounded-xl hover:bg-slate-50 transition-all text-center"
                   >
-                    Copy slideshow link
+                    {copiedSlideshow ? '✓ Copied!' : 'Copy slideshow link'}
                   </button>
                 </div>
               </div>
@@ -628,13 +668,15 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
                 onClick={() => {
                   const url = `${window.location.origin}/e/${event.id}/wall`
                   navigator.clipboard.writeText(url)
+                  setCopiedWall(true)
+                  setTimeout(() => setCopiedWall(false), 2000)
                 }}
                 className="flex items-center justify-center gap-2 text-sm font-semibold text-slate-600 border border-slate-200 px-4 py-3 rounded-xl hover:bg-slate-50 transition-all"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
-                Copy wall link
+                {copiedWall ? '✓ Copied!' : 'Copy wall link'}
               </button>
             </div>
           </div>
@@ -675,17 +717,56 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Custom accent colour</label>
               <div className="flex items-center gap-3">
-                <input type="color" defaultValue={event.custom_color || '#0A4F6B'} className="w-10 h-10 rounded-lg cursor-pointer border border-slate-200" />
-                <span className="text-sm text-slate-500">Shown on the guest upload page</span>
+                <input
+                  type="color"
+                  value={customColor}
+                  onChange={e => setCustomColor(e.target.value)}
+                  className="w-10 h-10 rounded-lg cursor-pointer border border-slate-200"
+                />
+                <div>
+                  <p className="text-sm text-slate-600 font-mono">{customColor}</p>
+                  <p className="text-xs text-slate-400">Shown on the guest upload page</p>
+                </div>
+                <button
+                  onClick={saveCustomColor}
+                  disabled={colorSaving}
+                  className="ml-auto bg-[#0A4F6B] disabled:opacity-60 text-white font-bold text-sm px-4 py-2 rounded-xl hover:bg-[#1E5AAF] transition-all"
+                >
+                  {colorSaving ? 'Saving…' : colorSaved ? '✓ Saved!' : 'Save colour'}
+                </button>
               </div>
             </div>
           </div>
           <div className="bg-red-50 border border-red-100 rounded-2xl p-5">
             <h3 className="font-semibold text-red-700 mb-2">Danger zone</h3>
-            <p className="text-xs text-red-500 mb-3">Deleting an event is permanent and cannot be undone.</p>
-            <button className="text-sm text-red-600 font-semibold border border-red-200 px-4 py-2 rounded-xl hover:bg-red-100 transition-all">
-              Delete event
-            </button>
+            <p className="text-xs text-red-500 mb-3">Deleting an event permanently removes all uploads, QR codes, and reels. This cannot be undone.</p>
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-sm text-red-600 font-semibold border border-red-200 px-4 py-2 rounded-xl hover:bg-red-100 transition-all"
+              >
+                Delete event
+              </button>
+            ) : (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <p className="text-sm font-semibold text-red-700">Are you sure? This cannot be undone.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleDeleteEvent}
+                    disabled={deleting}
+                    className="text-sm text-white bg-red-600 font-bold px-4 py-2 rounded-xl hover:bg-red-700 disabled:opacity-60 transition-all"
+                  >
+                    {deleting ? 'Deleting…' : 'Yes, delete'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="text-sm text-slate-600 border border-slate-200 font-semibold px-4 py-2 rounded-xl hover:bg-slate-50 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

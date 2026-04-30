@@ -13,7 +13,6 @@ const PUBLIC_ROUTES = [
   '/terms',
   '/privacy',
   '/contact',
-  '/affiliate',
 ]
 
 // Routes starting with these prefixes are always public (guest upload pages)
