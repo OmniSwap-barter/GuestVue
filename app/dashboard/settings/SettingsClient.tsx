@@ -30,7 +30,8 @@ export default function SettingsClient({ profile, email }: Props) {
     setSaving(true)
     setSaveStatus('idle')
 
-    const supabase = createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = createClient() as any
     const { error } = await supabase
       .from('profiles')
       .update({ full_name: fullName.trim() || null, phone: phone.trim() || null })

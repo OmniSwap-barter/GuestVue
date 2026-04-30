@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import type QRCodeLib from 'qrcode'
 
 interface Event {
   id: string
@@ -51,36 +52,25 @@ export default function QRCustomizer({ event }: Props) {
   const [showLogo, setShowLogo] = useState(true)
   const [size] = useState(220)
   const [downloading, setDownloading] = useState(false)
-  const [qrLoaded, setQrLoaded] = useState(false)
 
   const generateQR = useCallback(async () => {
     if (typeof window === 'undefined') return
-    const QRCode = (window as any).QRCode
-    if (!QRCode) return
     try {
-      const canvas = document.createElement('canvas')
-      await QRCode.toCanvas(canvas, eventUrl, {
+      // Dynamic import uses the installed npm 'qrcode' package (browser-compatible)
+      const QRCode = (await import('qrcode')) as typeof QRCodeLib
+      const dataUrl = await QRCode.toDataURL(eventUrl, {
         width: size,
         margin: 2,
         color: { dark: fgColor, light: bgColor },
         errorCorrectionLevel: showLogo ? 'H' : 'M',
       })
-      setQrDataUrl(canvas.toDataURL('image/png'))
+      setQrDataUrl(dataUrl)
     } catch (e) {
       console.error('QR error', e)
     }
   }, [eventUrl, fgColor, bgColor, size, showLogo])
 
-  // Load qrcode.js then generate
-  useEffect(() => {
-    if (qrLoaded) { generateQR(); return }
-    const script = document.createElement('script')
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
-    script.onload = () => { setQrLoaded(true) }
-    document.head.appendChild(script)
-  }, [qrLoaded, generateQR])
-
-  useEffect(() => { if (qrLoaded) generateQR() }, [qrLoaded, generateQR])
+  useEffect(() => { generateQR() }, [generateQR])
 
   async function downloadCard() {
     setDownloading(true)
@@ -104,6 +94,7 @@ export default function QRCustomizer({ event }: Props) {
 
   return (
     <>
+      {/* html2canvas for card PNG download */}
       <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" async />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

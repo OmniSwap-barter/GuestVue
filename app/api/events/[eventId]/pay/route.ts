@@ -18,7 +18,7 @@ export async function POST(
       .select('*')
       .eq('id', eventId)
       .eq('host_id', user.id)
-      .single()
+      .single() as { data: { id: string; status: string; plan: string; name: string } | null; error: any }
 
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     if (event.status === 'active') return NextResponse.json({ error: 'Event is already active' }, { status: 400 })
