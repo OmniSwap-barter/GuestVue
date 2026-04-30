@@ -1,10 +1,6 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  typescript: {
-    // Supabase types not yet generated — suppress until schema is applied and types are generated
-    ignoreBuildErrors: true,
-  },
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -17,6 +13,16 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: '*.r2.cloudflarestorage.com',
+      },
+      {
+        // Cloudflare R2 public bucket URLs (pub-<hash>.r2.dev)
+        protocol: 'https',
+        hostname: '*.r2.dev',
+      },
+      {
+        // Custom R2 domain if configured
+        protocol: 'https',
+        hostname: 'media.theguestvue.com',
       },
     ],
   },
