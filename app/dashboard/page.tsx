@@ -5,7 +5,13 @@ import { createServerClient_server, createServerUserClient } from '@/lib/supabas
 import { formatNaira } from '@/lib/pricing'
 import SignOutButton from './SignOutButton'
 
-export default async function DashboardPage() {
+interface Props {
+  searchParams: Promise<{ onboarded?: string }>
+}
+
+export default async function DashboardPage({ searchParams }: Props) {
+  const { onboarded } = await searchParams
+
   // Auth check via SSR client (needs cookies)
   const supabase = await createServerClient_server()
   const { data: { user } } = await supabase.auth.getUser()
@@ -30,10 +36,16 @@ export default async function DashboardPage() {
         email: user.email ?? '',
         full_name: (user.user_metadata?.full_name as string) ?? '',
         plan_type: 'individual',
+        onboarding_complete: true,
       }, { onConflict: 'id' })
       .select()
       .single()
     profile = created
+  }
+
+  // Gate: incomplete onboarding → redirect (skip for admin-created profiles)
+  if (profile && profile.onboarding_complete === false) {
+    redirect('/onboarding')
   }
 
   // Fallback object if DB is entirely unreachable — user still lands on dashboard
@@ -44,6 +56,8 @@ export default async function DashboardPage() {
     plan_type: 'individual' as const,
     referral_code: null,
     is_admin: false,
+    onboarding_complete: true,
+    country: null,
     created_at: new Date().toISOString(),
   }
 
@@ -53,12 +67,19 @@ export default async function DashboardPage() {
     .select('*')
     .eq('host_id', user.id)
     .order('created_at', { ascending: false })
-    .limit(10)
+    .limit(20)
 
   const activeEvents = events?.filter(e => e.status === 'active') ?? []
   const totalUploads = events?.reduce((sum, e) => sum + e.upload_count, 0) ?? 0
   const firstName = safeProfile.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'there'
-  const isFree = safeProfile.plan_type === 'individual'
+
+  const planType = safeProfile.plan_type ?? 'individual'
+  const isFree = planType === 'individual'
+  const isPlanner = planType === 'planner'
+  const isBusiness = planType === 'business'
+  const isCorporate = planType === 'corporate'
+
+  const planLabel = planType.charAt(0).toUpperCase() + planType.slice(1)
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
@@ -71,6 +92,12 @@ export default async function DashboardPage() {
             <span className="font-display font-black text-slate-900 hidden sm:block">GuestVue</span>
           </Link>
           <nav className="flex items-center gap-1">
+            {(isPlanner || isBusiness || isCorporate) && (
+              <Link href="/dashboard/analytics"
+                className="px-3 py-2 text-sm font-medium text-slate-500 hover:text-[#14B8A6] rounded-lg hover:bg-[#14B8A6]/5 transition-all hidden sm:block">
+                Analytics
+              </Link>
+            )}
             <Link href="/dashboard/affiliate"
               className="px-3 py-2 text-sm font-medium text-slate-500 hover:text-[#14B8A6] rounded-lg hover:bg-[#14B8A6]/5 transition-all hidden sm:block">
               Affiliate
@@ -89,15 +116,52 @@ export default async function DashboardPage() {
         </div>
       </header>
 
+      {/* ── Welcome banner (post-onboarding) ────────────────────────────── */}
+      {onboarded === '1' && (
+        <div className="bg-gradient-to-r from-[#14B8A6] to-[#1E5AAF] text-white px-4 py-3">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎉</span>
+              <div>
+                <p className="font-bold text-sm">Welcome to GuestVue, {firstName}!</p>
+                <p className="text-white/80 text-xs">Your account is ready. Create your first event and start collecting memories.</p>
+              </div>
+            </div>
+            <Link href="/dashboard/events/new"
+              className="flex-shrink-0 bg-white/20 hover:bg-white/30 border border-white/30 font-bold text-xs px-3 py-1.5 rounded-lg transition-all">
+              Create event →
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* ── Gradient hero strip ─────────────────────────────────────────── */}
       <div className="text-white px-4 py-10" style={{ background: 'linear-gradient(135deg, #060d1a 0%, #0a1628 50%, #0A4F6B 100%)' }}>
         <div className="max-w-5xl mx-auto">
-          <p className="text-white/50 text-sm font-medium mb-1">Dashboard</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-white/50 text-sm font-medium">Dashboard</p>
+            <span className="text-white/20">·</span>
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{
+              background: isFree ? 'rgba(255,255,255,0.1)' :
+                          isPlanner ? 'rgba(20,184,166,0.25)' :
+                          isBusiness ? 'rgba(232,115,92,0.25)' :
+                          'rgba(30,90,175,0.25)',
+              color: isFree ? 'rgba(255,255,255,0.5)' :
+                     isPlanner ? '#14B8A6' :
+                     isBusiness ? '#E8735C' :
+                     '#60A5FA',
+            }}>
+              {planLabel}
+            </span>
+          </div>
           <h1 className="font-display font-black text-3xl text-white mb-1">
             Welcome back, {firstName}
           </h1>
           <p className="text-white/60 text-sm">
-            Here&apos;s what&apos;s happening across your events.
+            {isPlanner && 'Manage your events and deliver unforgettable client experiences.'}
+            {isBusiness && 'Your brand\'s content engine is running.'}
+            {isCorporate && 'Enterprise overview — all events and accounts.'}
+            {isFree && 'Here\'s what\'s happening across your events.'}
           </p>
         </div>
       </div>
@@ -110,7 +174,7 @@ export default async function DashboardPage() {
             { label: 'Active Events', value: activeEvents.length, color: '#14B8A6' },
             { label: 'Total Events', value: events?.length ?? 0, color: '#1E5AAF' },
             { label: 'Photos Collected', value: totalUploads.toLocaleString(), color: '#E8735C' },
-            { label: 'Plan', value: safeProfile.plan_type.charAt(0).toUpperCase() + safeProfile.plan_type.slice(1), color: '#0A4F6B' },
+            { label: 'Plan', value: planLabel, color: '#0A4F6B' },
           ].map(stat => (
             <div key={stat.label} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
               <p className="font-display font-black text-2xl" style={{ color: stat.color }}>{stat.value}</p>
@@ -120,12 +184,19 @@ export default async function DashboardPage() {
         </div>
 
         {/* ── Quick actions ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3 mb-8">
+        <div className={`grid gap-3 mb-8 ${isBusiness || isCorporate ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <Link href="/dashboard/events/new"
             className="bg-white border border-slate-100 rounded-2xl p-4 text-center hover:border-[#14B8A6]/40 hover:shadow-md transition-all group">
             <div className="text-2xl mb-2">🎉</div>
             <p className="text-sm font-semibold text-slate-700 group-hover:text-[#14B8A6] transition-colors">Create Event</p>
           </Link>
+          {(isBusiness || isCorporate) && (
+            <Link href="/dashboard/analytics"
+              className="bg-white border border-slate-100 rounded-2xl p-4 text-center hover:border-[#E8735C]/40 hover:shadow-md transition-all group">
+              <div className="text-2xl mb-2">📊</div>
+              <p className="text-sm font-semibold text-slate-700 group-hover:text-[#E8735C] transition-colors">Analytics</p>
+            </Link>
+          )}
           <Link href="/dashboard/affiliate"
             className="bg-white border border-slate-100 rounded-2xl p-4 text-center hover:border-[#1E5AAF]/40 hover:shadow-md transition-all group">
             <div className="text-2xl mb-2">🔗</div>
@@ -157,10 +228,135 @@ export default async function DashboardPage() {
           </div>
         )}
 
+        {/* ── PLANNER: Multi-event panel ───────────────────────────────────── */}
+        {isPlanner && (
+          <div className="grid sm:grid-cols-2 gap-6 mb-8">
+            {/* Event pipeline summary */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-900">Event Pipeline</h3>
+                <Link href="/dashboard/events/new" className="text-xs font-bold text-[#14B8A6] hover:underline">+ New</Link>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: 'Active', count: activeEvents.length, color: '#14B8A6', bg: '#14B8A6/10' },
+                  { label: 'Total Managed', count: events?.length ?? 0, color: '#1E5AAF', bg: '#1E5AAF/10' },
+                  { label: 'Total Uploads', count: totalUploads.toLocaleString(), color: '#E8735C', bg: '#E8735C/10' },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                    <span className="text-sm text-slate-500">{item.label}</span>
+                    <span className="font-black text-sm" style={{ color: item.color }}>{item.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Client sub-accounts teaser */}
+            <div className="bg-gradient-to-br from-[#0A4F6B] to-[#1E5AAF] rounded-2xl p-5 text-white relative overflow-hidden">
+              <div className="absolute right-0 bottom-0 text-8xl opacity-10 leading-none">👥</div>
+              <div className="relative">
+                <span className="inline-block bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full mb-3">Coming Soon</span>
+                <h3 className="font-bold text-lg mb-1">Client Sub-Accounts</h3>
+                <p className="text-white/70 text-sm mb-4 leading-relaxed">
+                  Give each client their own login to view their event gallery and downloads — without access to your full account.
+                </p>
+                <button disabled className="bg-white/20 border border-white/30 text-white/70 text-xs font-bold px-4 py-2 rounded-lg cursor-not-allowed">
+                  Notify me when live
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── BUSINESS: Analytics + capabilities panel ─────────────────────── */}
+        {isBusiness && (
+          <div className="grid sm:grid-cols-3 gap-4 mb-8">
+            {/* Monthly metrics */}
+            <div className="sm:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-900">Content Overview</h3>
+                <span className="text-xs text-slate-400">All time</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Events Created', value: events?.length ?? 0, icon: '📅', color: '#0A4F6B' },
+                  { label: 'Active Campaigns', value: activeEvents.length, icon: '🔴', color: '#14B8A6' },
+                  { label: 'UGC Collected', value: totalUploads.toLocaleString(), icon: '📸', color: '#E8735C' },
+                ].map(m => (
+                  <div key={m.label} className="text-center">
+                    <div className="text-2xl mb-1">{m.icon}</div>
+                    <p className="font-black text-xl" style={{ color: m.color }}>{m.value}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{m.label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                <p className="text-xs text-slate-400">Full analytics dashboard coming soon</p>
+                <Link href="/dashboard/analytics" className="text-xs font-bold text-[#14B8A6] hover:underline">View →</Link>
+              </div>
+            </div>
+
+            {/* Capabilities */}
+            <div className="space-y-3">
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">🏷️</span>
+                  <p className="font-bold text-sm text-slate-900">White-Label</p>
+                  <span className="ml-auto text-xs bg-amber-50 text-amber-600 font-bold px-2 py-0.5 rounded-full">Soon</span>
+                </div>
+                <p className="text-xs text-slate-400">Your brand, your QR codes.</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">🔌</span>
+                  <p className="font-bold text-sm text-slate-900">API Access</p>
+                  <span className="ml-auto text-xs bg-amber-50 text-amber-600 font-bold px-2 py-0.5 rounded-full">Soon</span>
+                </div>
+                <p className="text-xs text-slate-400">Webhooks &amp; CRM sync.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── CORPORATE: Enterprise overview ───────────────────────────────── */}
+        {isCorporate && (
+          <div className="mb-8 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #060d1a, #0A4F6B)' }}>
+              <div>
+                <h3 className="font-bold text-white">Enterprise Dashboard</h3>
+                <p className="text-white/50 text-xs">Corporate account — full platform access</p>
+              </div>
+              <span className="bg-white/10 text-white text-xs font-bold px-3 py-1 rounded-full border border-white/20">
+                Corporate
+              </span>
+            </div>
+            <div className="grid sm:grid-cols-4 divide-x divide-slate-50">
+              {[
+                { icon: '📅', label: 'Total Events', value: events?.length ?? 0 },
+                { icon: '🔴', label: 'Active', value: activeEvents.length },
+                { icon: '📸', label: 'Total UGC', value: totalUploads.toLocaleString() },
+                { icon: '👥', label: 'Sub-accounts', value: '—' },
+              ].map(m => (
+                <div key={m.label} className="px-5 py-5 text-center">
+                  <div className="text-2xl mb-1">{m.icon}</div>
+                  <p className="font-black text-xl text-[#0A4F6B]">{m.value}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{m.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <p className="text-xs text-slate-500">Need custom integrations or a dedicated account manager?</p>
+              <Link href="/contact" className="text-xs font-bold text-[#0A4F6B] hover:underline">Contact Enterprise Support →</Link>
+            </div>
+          </div>
+        )}
+
         {/* ── Events list ─────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="font-display font-bold text-lg text-slate-900">Your Events</h2>
+            <h2 className="font-display font-bold text-lg text-slate-900">
+              {isPlanner ? 'Client Events' : isBusiness ? 'Campaigns' : 'Your Events'}
+            </h2>
             <Link href="/dashboard/events/new"
               className="text-sm font-bold px-3 py-1.5 rounded-lg transition-all"
               style={{ color: '#14B8A6' }}>
@@ -172,7 +368,7 @@ export default async function DashboardPage() {
             <div className="py-16 text-center px-4">
               <div className="text-5xl mb-4">🎊</div>
               <h3 className="font-display font-bold text-lg text-slate-900 mb-2">
-                Create your first event
+                {isPlanner ? 'Add your first client event' : isBusiness ? 'Launch your first campaign' : 'Create your first event'}
               </h3>
               <p className="text-sm text-slate-400 mb-6 max-w-xs mx-auto">
                 Set up a QR code in under 2 minutes. Guests scan, upload, and you collect every memory.
@@ -180,7 +376,7 @@ export default async function DashboardPage() {
               <Link href="/dashboard/events/new"
                 className="inline-flex px-6 py-3 text-white font-bold rounded-xl shadow-lg hover:opacity-90 transition-all text-sm"
                 style={{ background: 'linear-gradient(135deg, #14B8A6, #1E5AAF)' }}>
-                Create Event
+                {isPlanner ? 'Create Client Event' : isBusiness ? 'Create Campaign' : 'Create Event'}
               </Link>
             </div>
           ) : (

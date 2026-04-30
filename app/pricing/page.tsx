@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import Logo from '@/components/Logo'
 import { formatNaira, PLANS, BUSINESS_PLANS, PLANNER_PLANS, ADDONS } from '@/lib/pricing'
+import { createServerClient_server } from '@/lib/supabase/server'
 
 export const metadata = {
   title: 'Pricing — GuestVue',
@@ -19,7 +20,19 @@ const X = () => (
   </svg>
 )
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  // Detect logged-in users so we route them to checkout directly
+  const supabase = await createServerClient_server()
+  const { data: { user } } = await supabase.auth.getUser()
+  const isLoggedIn = !!user
+
+  // Vendor/business upgrade: logged-in users go straight to subscribe API,
+  // guests go to signup first
+  function planHref(planId: string, accountType: string): string {
+    if (!isLoggedIn) return '/auth/signup'
+    return `/api/onboarding/subscribe?planId=${planId}&accountType=${accountType}`
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
 
@@ -28,12 +41,20 @@ export default function PricingPage() {
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/"><Logo size={30} /></Link>
           <div className="flex items-center gap-3">
-            <Link href="/auth/login" className="text-sm font-semibold text-slate-600 hover:text-[#0A4F6B] px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-all">
-              Sign in
-            </Link>
-            <Link href="/auth/signup" className="text-sm font-bold text-white bg-[#0A4F6B] px-4 py-2 rounded-xl hover:bg-[#1E5AAF] transition-all">
-              Start free — no card needed
-            </Link>
+            {isLoggedIn ? (
+              <Link href="/dashboard" className="text-sm font-bold text-white bg-[#0A4F6B] px-4 py-2 rounded-xl hover:bg-[#1E5AAF] transition-all">
+                Go to Dashboard →
+              </Link>
+            ) : (
+              <>
+                <Link href="/auth/login" className="text-sm font-semibold text-slate-600 hover:text-[#0A4F6B] px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-all">
+                  Sign in
+                </Link>
+                <Link href="/auth/signup" className="text-sm font-bold text-white bg-[#0A4F6B] px-4 py-2 rounded-xl hover:bg-[#1E5AAF] transition-all">
+                  Start free — no card needed
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -52,8 +73,8 @@ export default function PricingPage() {
           GuestVue collects your guests&apos; photos and videos instantly via QR code — no app download needed. Start completely free, then upgrade if you need more.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/auth/signup" className="inline-block bg-white text-[#0A4F6B] font-black px-8 py-4 rounded-2xl hover:scale-105 transition-all shadow-xl text-base">
-            Create your first event free →
+          <Link href={isLoggedIn ? '/dashboard/events/new' : '/auth/signup'} className="inline-block bg-white text-[#0A4F6B] font-black px-8 py-4 rounded-2xl hover:scale-105 transition-all shadow-xl text-base">
+            {isLoggedIn ? 'Create a new event →' : 'Create your first event free →'}
           </Link>
           <a href="#plans" className="inline-block border border-white/30 text-white font-semibold px-8 py-4 rounded-2xl hover:bg-white/10 transition-all text-base">
             See all plans ↓
@@ -117,8 +138,8 @@ export default function PricingPage() {
                   </div>
                 ))}
               </div>
-              <Link href="/auth/signup" className="inline-block bg-white text-[#0A4F6B] font-black px-8 py-3 rounded-2xl hover:scale-105 transition-all text-sm shadow-xl">
-                Create your free event now →
+              <Link href={isLoggedIn ? '/dashboard/events/new' : '/auth/signup'} className="inline-block bg-white text-[#0A4F6B] font-black px-8 py-3 rounded-2xl hover:scale-105 transition-all text-sm shadow-xl">
+                {isLoggedIn ? 'Create a new event →' : 'Create your free event now →'}
               </Link>
               <p className="text-white/40 text-xs mt-3">Add AI reels, slideshows, extended pages as add-ons when you need them</p>
             </div>
@@ -308,7 +329,7 @@ export default function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/auth/signup"
+                <Link href={planHref(plan.id, 'planner')}
                   className={`block text-center py-2.5 rounded-xl font-bold text-sm transition-all ${
                     highlight ? 'text-white hover:opacity-90' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
@@ -392,7 +413,7 @@ export default function PricingPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/auth/signup"
+                <Link href={planHref(plan.id, 'business')}
                   className={`block text-center py-3 rounded-xl font-bold text-sm transition-all ${
                     highlight ? 'bg-[#E8735C] text-white hover:opacity-90' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
@@ -494,8 +515,8 @@ export default function PricingPage() {
             <p className="text-4xl mb-4">✨</p>
             <h2 className="font-black text-3xl mb-3">Ready to collect your first memory?</h2>
             <p className="text-white/70 mb-6 max-w-sm mx-auto text-sm">Start free. No card. No pressure. Upgrade if you fall in love — most people do.</p>
-            <Link href="/auth/signup" className="inline-block bg-white text-[#0A4F6B] font-black px-10 py-4 rounded-2xl hover:scale-105 transition-all shadow-2xl text-base">
-              Create your event free →
+            <Link href={isLoggedIn ? '/dashboard/events/new' : '/auth/signup'} className="inline-block bg-white text-[#0A4F6B] font-black px-10 py-4 rounded-2xl hover:scale-105 transition-all shadow-2xl text-base">
+              {isLoggedIn ? 'Go to your dashboard →' : 'Create your event free →'}
             </Link>
             <p className="text-white/40 text-xs mt-3">Takes less than 2 minutes</p>
           </div>

@@ -74,10 +74,12 @@ export async function middleware(request: NextRequest) {
   }
 
   // If user is NOT logged in and hits a protected route, redirect to login
-  if (!user && pathname.startsWith('/dashboard')) {
-    const loginUrl = new URL('/auth/login', request.url)
-    loginUrl.searchParams.set('next', pathname)
-    return NextResponse.redirect(loginUrl)
+  if (!user) {
+    if (pathname.startsWith('/dashboard') || pathname.startsWith('/onboarding')) {
+      const loginUrl = new URL('/auth/login', request.url)
+      loginUrl.searchParams.set('next', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
   }
 
   // Admin-only routes

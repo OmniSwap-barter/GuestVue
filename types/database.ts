@@ -162,33 +162,39 @@ export type Database = {
       }
       profiles: {
         Row: {
+          country: string | null
           created_at: string
           email: string
           full_name: string | null
           id: string
           is_admin: boolean
+          onboarding_complete: boolean
           phone: string | null
           plan_type: string
           referral_code: string | null
           referred_by: string | null
         }
         Insert: {
+          country?: string | null
           created_at?: string
           email: string
           full_name?: string | null
           id: string
           is_admin?: boolean
+          onboarding_complete?: boolean
           phone?: string | null
           plan_type?: string
           referral_code?: string | null
           referred_by?: string | null
         }
         Update: {
+          country?: string | null
           created_at?: string
           email?: string
           full_name?: string | null
           id?: string
           is_admin?: boolean
+          onboarding_complete?: boolean
           phone?: string | null
           plan_type?: string
           referral_code?: string | null
