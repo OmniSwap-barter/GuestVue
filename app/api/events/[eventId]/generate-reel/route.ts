@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
 
 // ── Music track URLs ──────────────────────────────────────────────────────────
-const MUSIC_URLS: Record<string, string> = {
-  afrobeats_upbeat:  'https://cdn.shotstack.io/au/stage/music/afrobeats-upbeat.mp3',
-  afrobeats_chill:   'https://cdn.shotstack.io/au/stage/music/afrobeats-chill.mp3',
-  amapiano_dance:    'https://cdn.shotstack.io/au/stage/music/amapiano-dance.mp3',
-  highlife_classic:  'https://cdn.shotstack.io/au/stage/music/highlife-classic.mp3',
-  pop_romantic:      'https://cdn.shotstack.io/au/stage/music/pop-romantic.mp3',
-  pop_energetic:     'https://cdn.shotstack.io/au/stage/music/pop-energetic.mp3',
-  cinematic:         'https://cdn.shotstack.io/au/stage/music/cinematic-instrumental.mp3',
+// Use NEXT_PUBLIC_APP_URL-relative paths served from /public/music/ OR
+// set MUSIC_BASE_URL env var to point to a CDN / Supabase storage bucket.
+// Tracks must be publicly accessible MP3s reachable by Shotstack's renderer.
+// Set any value to null to skip that track (renders will have no music).
+const MUSIC_BASE = process.env.MUSIC_BASE_URL ?? ''
+
+const MUSIC_URLS: Record<string, string | null> = {
+  afrobeats_upbeat:  MUSIC_BASE ? `${MUSIC_BASE}/afrobeats-upbeat.mp3`         : null,
+  afrobeats_chill:   MUSIC_BASE ? `${MUSIC_BASE}/afrobeats-chill.mp3`          : null,
+  amapiano_dance:    MUSIC_BASE ? `${MUSIC_BASE}/amapiano-dance.mp3`            : null,
+  highlife_classic:  MUSIC_BASE ? `${MUSIC_BASE}/highlife-classic.mp3`         : null,
+  pop_romantic:      MUSIC_BASE ? `${MUSIC_BASE}/pop-romantic.mp3`             : null,
+  pop_energetic:     MUSIC_BASE ? `${MUSIC_BASE}/pop-energetic.mp3`            : null,
+  cinematic:         MUSIC_BASE ? `${MUSIC_BASE}/cinematic-instrumental.mp3`   : null,
 }
 
 // ── 10 Viral Themes ───────────────────────────────────────────────────────────
@@ -82,7 +88,7 @@ function getTransitionForIndex(
 
 function buildShotstackManifest(
   media: MediaItem[],
-  musicTrackId: string | null,
+  musicTrackId: string | null,     // track key (not a URL)
   logoUrl: string | null,
   removeWatermark: boolean,
   logoPosition: 'throughout' | 'outro',
@@ -232,7 +238,7 @@ function buildShotstackManifest(
   }
 
   // ── Music track ───────────────────────────────────────────────────────────
-  const musicUrl = musicTrackId ? (MUSIC_URLS[musicTrackId] ?? null) : null
+  const musicUrl: string | null = musicTrackId ? (MUSIC_URLS[musicTrackId] ?? null) : null
   if (musicUrl) {
     tracks.push({
       clips: [{
