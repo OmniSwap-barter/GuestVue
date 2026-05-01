@@ -64,7 +64,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const { error } = await admin.from('events').update(updates).eq('id', eventId) as any
+    const { error } = await admin.from('events').update(updates as any).eq('id', eventId) as any
     if (error) return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
     return NextResponse.json({ ok: true })
   } catch (err) {

@@ -278,6 +278,15 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#x27;')
 }
 
+// ── Normalize SHOTSTACK_ENV ───────────────────────────────────────────────────
+// Valid Shotstack URL segments are exactly "stage" (sandbox) or "v1" (production).
+// Users may set SHOTSTACK_ENV to "PRODUCTION", "prod", "live", etc. — normalise here.
+function normalizeShotstackEnv(raw: string | undefined): string {
+  const s = (raw ?? '').toLowerCase().trim()
+  if (s === 'v1' || s === 'production' || s === 'prod' || s === 'live') return 'v1'
+  return 'stage'
+}
+
 // ── Route ─────────────────────────────────────────────────────────────────────
 export async function POST(
   req: NextRequest,
@@ -442,14 +451,6 @@ export async function POST(
 
   // ── Submit to Shotstack ────────────────────────────────────────────────────
   const apiKey = process.env.SHOTSTACK_API_KEY
-
-  // Normalize SHOTSTACK_ENV — users may set "PRODUCTION", "SANDBOX", etc.
-  // Valid Shotstack values are exactly "stage" (sandbox) or "v1" (production).
-  function normalizeShotstackEnv(raw: string | undefined): string {
-    const s = (raw ?? '').toLowerCase().trim()
-    if (s === 'v1' || s === 'production' || s === 'prod' || s === 'live') return 'v1'
-    return 'stage'
-  }
   const apiEnv = normalizeShotstackEnv(process.env.SHOTSTACK_ENV)
 
   if (!apiKey) {

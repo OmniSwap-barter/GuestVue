@@ -43,7 +43,7 @@ export async function PATCH(
 
     const { error } = await admin
       .from('events')
-      .update(updates)
+      .update(updates as any)
       .eq('id', eventId) as any
 
     if (error) {
