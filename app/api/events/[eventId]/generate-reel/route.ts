@@ -484,10 +484,12 @@ export async function POST(
       const errBody = await shotstackRes.text()
       console.error('[generate-reel] Shotstack rejected:', shotstackRes.status, errBody)
 
-      // Mark as failed so user can retry — not stuck at 'queued' forever
+      // Include Shotstack's full error so we can diagnose from the UI
+      const errMsg = `Shotstack HTTP ${shotstackRes.status}: ${errBody.slice(0, 300)}`
+
       await admin.from('reels').update({
         status: 'failed',
-        error_msg: `Render failed (HTTP ${shotstackRes.status}). Try again.`,
+        error_msg: errMsg,
       }).eq('id', reel.id)
       reel.status = 'failed'
 
