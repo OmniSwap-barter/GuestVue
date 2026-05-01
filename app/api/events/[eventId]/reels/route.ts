@@ -35,7 +35,9 @@ export async function GET(
   // poll Shotstack directly so the frontend's 6-second poller resolves the status
   // even if the webhook callback was missed or not yet delivered.
   const apiKey = process.env.SHOTSTACK_API_KEY
-  const apiEnv = process.env.SHOTSTACK_ENV || 'stage'
+  // Normalize SHOTSTACK_ENV — users may set "PRODUCTION", "SANDBOX", etc.
+  const raw = (process.env.SHOTSTACK_ENV ?? '').toLowerCase().trim()
+  const apiEnv = (raw === 'v1' || raw === 'production' || raw === 'prod' || raw === 'live') ? 'v1' : 'stage'
 
   if (apiKey && reels) {
     const pending = (reels as any[]).filter(

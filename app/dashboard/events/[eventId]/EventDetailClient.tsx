@@ -195,10 +195,17 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
   async function saveCustomColor() {
     setColorSaving(true)
     try {
-      const supabase = createClient()
-      await (supabase as any).from('events').update({ custom_color: customColor }).eq('id', event.id)
-      setColorSaved(true)
-      setTimeout(() => setColorSaved(false), 3000)
+      const res = await fetch(`/api/events/${event.id}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ custom_color: customColor }),
+      })
+      if (res.ok) {
+        setColorSaved(true)
+        setTimeout(() => setColorSaved(false), 3000)
+      } else {
+        alert('Failed to save colour. Please try again.')
+      }
     } finally {
       setColorSaving(false)
     }
@@ -211,9 +218,15 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
   async function handleDeleteEvent() {
     setDeleting(true)
     try {
-      const supabase = createClient()
-      await (supabase as any).from('events').delete().eq('id', event.id)
-      router.push('/dashboard')
+      const res = await fetch(`/api/events/${event.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        router.push('/dashboard')
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || 'Delete failed. Please try again.')
+        setDeleting(false)
+        setConfirmDelete(false)
+      }
     } catch {
       alert('Delete failed. Please try again.')
       setDeleting(false)

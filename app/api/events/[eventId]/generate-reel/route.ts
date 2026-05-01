@@ -442,7 +442,15 @@ export async function POST(
 
   // ── Submit to Shotstack ────────────────────────────────────────────────────
   const apiKey = process.env.SHOTSTACK_API_KEY
-  const apiEnv = process.env.SHOTSTACK_ENV || 'stage'
+
+  // Normalize SHOTSTACK_ENV — users may set "PRODUCTION", "SANDBOX", etc.
+  // Valid Shotstack values are exactly "stage" (sandbox) or "v1" (production).
+  function normalizeShotstackEnv(raw: string | undefined): string {
+    const s = (raw ?? '').toLowerCase().trim()
+    if (s === 'v1' || s === 'production' || s === 'prod' || s === 'live') return 'v1'
+    return 'stage'
+  }
+  const apiEnv = normalizeShotstackEnv(process.env.SHOTSTACK_ENV)
 
   if (!apiKey) {
     // No API key — mark as failed immediately so user sees an error (not a forever-spinner)
