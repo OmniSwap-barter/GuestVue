@@ -31,8 +31,10 @@ interface SessionData {
 
 const MAX_PHOTO_MB = 20
 const MAX_VIDEO_MB = 100
-const COMPRESS_TARGET_PX = 1600
-const COMPRESS_QUALITY = 0.82
+// Preserve original resolution — only re-encode if the image is truly oversized (>6000px)
+// so Shotstack gets full-quality source material for the highlight reel.
+const COMPRESS_TARGET_PX = 6000
+const COMPRESS_QUALITY = 0.95
 
 // Per-session soft limits (client-side, stored in sessionStorage)
 const SESSION_MAX_PHOTOS = 3
@@ -613,7 +615,7 @@ export default function GuestUploadClient({ event, hostName, isExpired }: Props)
             )}
 
             <p className="text-center text-xs text-slate-400 mt-6">
-              Photos are compressed for fast upload on 3G/4G.
+              Photos are uploaded at full quality for the best reel results.
             </p>
           </>
         )}

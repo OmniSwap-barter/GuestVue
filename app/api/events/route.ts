@@ -35,13 +35,51 @@ export async function POST(req: NextRequest) {
     const token = headerToken ?? await getServerAccessToken()
     const db = token ? createUserAuthClient(token) : (await createServerUserClient())
 
+    // ── Entitlement check ──────────────────────────────────────────────────────
+    // Directive: Check 1 — active subscription OR is_unlimited flag
+    //            Check 2 — plan_type grants unlimited creation
+    // Outcome: bypass Paystack for unlimited planners; redirect others to pricing
+    const admin_check = createAdminClient()
+
+    const [{ data: profileData }, { data: activeSub }] = await Promise.all([
+      admin_check
+        .from('profiles')
+        .select('plan_type, is_unlimited')
+        .eq('id', user.id)
+        .single(),
+      admin_check
+        .from('subscriptions')
+        .select('id, status, current_period_end')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle(),
+    ])
+
+    // Active subscription: must have status=active AND not expired
+    const hasActiveSub =
+      !!activeSub &&
+      (!activeSub.current_period_end || new Date(activeSub.current_period_end) > new Date())
+
+    // Unlimited flag: set on Tycoon purchase or planner onboarding
+    const isUnlimitedFlag = profileData?.is_unlimited === true
+
+    const isPaidPlanType =
+      profileData?.plan_type === 'planner' ||
+      profileData?.plan_type === 'business' ||
+      profileData?.plan_type === 'corporate'
+
+    const isUnlimitedPlanner = (isUnlimitedFlag || hasActiveSub) && isPaidPlanType
+
     const body = await req.json()
-    const { name, event_date, hashtag, plan } = body as {
+    const { name, event_date, hashtag } = body as {
       name: string
       event_date: string | null
       hashtag: string | null
-      plan: 'free' | 'flex' | 'pro'
+      plan?: 'free' | 'flex' | 'pro'
     }
+
+    // Unlimited planners always get 'pro' features, no payment needed
+    const plan: 'free' | 'flex' | 'pro' = isUnlimitedPlanner ? 'pro' : (body.plan ?? 'free')
 
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Event name is required.' }, { status: 400 })
@@ -110,6 +148,9 @@ export async function POST(req: NextRequest) {
     // because the JWT in the Authorization header can diverge from the cookie-based
     // session, causing auth.uid() mismatches that trigger RLS violations.
     const admin = createAdminClient()
+    // Unlimited planners: activate immediately without payment
+    const initialStatus = (plan === 'free' || isUnlimitedPlanner) ? 'active' : 'paused'
+
     const { data: event, error: insertError } = await admin
       .from('events')
       .insert({
@@ -119,7 +160,7 @@ export async function POST(req: NextRequest) {
         event_date: event_date || null,
         hashtag: hashtag?.trim() || null,
         plan,
-        status: plan === 'free' ? 'active' : 'paused', // paused until payment confirmed
+        status: initialStatus, // active for free + unlimited planners, paused until payment otherwise
         qr_url: qrUrl,
         gallery_url: galleryUrl,
         upload_limit: planConfig.uploads === Infinity ? 999999 : planConfig.uploads,
@@ -137,9 +178,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ── For paid plans, create a Paystack payment link ─────────────────────────
+    // Skip for unlimited planners — they've already paid at the account level
     let paymentUrl: string | null = null
 
-    if (plan !== 'free' && process.env.PAYSTACK_SECRET_KEY) {
+    if (plan !== 'free' && !isUnlimitedPlanner && process.env.PAYSTACK_SECRET_KEY) {
       try {
         const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
           method: 'POST',

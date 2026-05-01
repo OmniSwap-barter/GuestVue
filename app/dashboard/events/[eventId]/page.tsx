@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { createServerClient_server, createServerUserClient } from '@/lib/supabase/server'
+import { createServerClient_server, createServerUserClient, createAdminClient } from '@/lib/supabase/server'
 import EventDetailClient from './EventDetailClient'
 
 interface Props {
@@ -30,14 +30,26 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
 
   if (!event) notFound()
 
-  // Fetch recent uploads
-  const { data: uploads } = await db
-    .from('uploads')
-    .select('*')
-    .eq('event_id', eventId)
-    .neq('status', 'deleted')
-    .order('created_at', { ascending: false })
-    .limit(50)
+  // Fetch recent uploads + user profile in parallel
+  const admin = createAdminClient()
+  const [{ data: uploads }, { data: profileData }] = await Promise.all([
+    db
+      .from('uploads')
+      .select('*')
+      .eq('event_id', eventId)
+      .neq('status', 'deleted')
+      .order('created_at', { ascending: false })
+      .limit(50),
+    admin
+      .from('profiles')
+      .select('plan_type, is_unlimited')
+      .eq('id', user.id)
+      .single(),
+  ])
+
+  const profile = profileData
+    ? { plan_type: profileData.plan_type ?? 'free', is_unlimited: profileData.is_unlimited ?? false }
+    : { plan_type: 'free', is_unlimited: false }
 
   return (
     <div className="min-h-screen bg-cloud">
@@ -71,7 +83,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
             </div>
           </div>
         )}
-        <EventDetailClient event={event} initialUploads={uploads ?? []} />
+        <EventDetailClient event={event} initialUploads={uploads ?? []} profile={profile} />
       </main>
     </div>
   )

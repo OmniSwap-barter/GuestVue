@@ -51,6 +51,19 @@ export async function POST(req: NextRequest) {
             .eq('id', eventId)
         }
 
+        // Grant unlimited entitlement for Tycoon / Business Tycoon plan purchases
+        const isTycoon = plan && (
+          plan.toLowerCase().includes('tycoon') ||
+          plan === 'business_scale' ||
+          plan === 'planner_pro'
+        )
+        if (userId && isTycoon) {
+          await supabase
+            .from('profiles')
+            .update({ is_unlimited: true })
+            .eq('id', userId)
+        }
+
         // Handle referral commission
         if (userId) {
           const { data: profile } = await supabase

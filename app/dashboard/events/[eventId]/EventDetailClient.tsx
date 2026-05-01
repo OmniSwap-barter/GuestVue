@@ -26,12 +26,13 @@ type Upload = Database['public']['Tables']['uploads']['Row']
 interface Props {
   event: Event
   initialUploads: Upload[]
+  profile?: { plan_type: string; is_unlimited: boolean }
 }
 
 type TabId = 'overview' | 'gallery' | 'slideshow' | 'reel' | 'embed' | 'addons' | 'settings'
 type MediaFilter = 'all' | 'photos' | 'videos'
 
-export default function EventDetailClient({ event, initialUploads }: Props) {
+export default function EventDetailClient({ event, initialUploads, profile }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<TabId>('overview')
   const [uploads, setUploads] = useState<Upload[]>(initialUploads)
@@ -632,6 +633,8 @@ export default function EventDetailClient({ event, initialUploads }: Props) {
         <ReelBuilderPanel
           event={{ id: event.id, name: event.name, plan: event.plan }}
           photos={photos}
+          videos={videos}
+          profile={profile}
         />
       )}
 

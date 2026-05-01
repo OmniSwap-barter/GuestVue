@@ -79,7 +79,14 @@ export default async function DashboardPage({ searchParams }: Props) {
   const isBusiness = planType === 'business'
   const isCorporate = planType === 'corporate'
 
-  const planLabel = planType.charAt(0).toUpperCase() + planType.slice(1)
+  // Full display name for the account category
+  const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+    individual: 'Individual Host',
+    planner:    'Event Planner',
+    business:   'Business / Brand',
+    corporate:  'Corporate',
+  }
+  const planLabel = ACCOUNT_TYPE_LABELS[planType] ?? (planType.charAt(0).toUpperCase() + planType.slice(1))
 
   return (
     <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
@@ -138,19 +145,25 @@ export default async function DashboardPage({ searchParams }: Props) {
       {/* ── Gradient hero strip ─────────────────────────────────────────── */}
       <div className="text-white px-4 py-10" style={{ background: 'linear-gradient(135deg, #060d1a 0%, #0a1628 50%, #0A4F6B 100%)' }}>
         <div className="max-w-5xl mx-auto">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-2">
             <p className="text-white/50 text-sm font-medium">Dashboard</p>
             <span className="text-white/20">·</span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{
-              background: isFree ? 'rgba(255,255,255,0.1)' :
-                          isPlanner ? 'rgba(20,184,166,0.25)' :
-                          isBusiness ? 'rgba(232,115,92,0.25)' :
-                          'rgba(30,90,175,0.25)',
-              color: isFree ? 'rgba(255,255,255,0.5)' :
-                     isPlanner ? '#14B8A6' :
+            {/* Account type identity chip — always visible */}
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border" style={{
+              background: isFree     ? 'rgba(255,255,255,0.08)' :
+                          isPlanner  ? 'rgba(20,184,166,0.2)'   :
+                          isBusiness ? 'rgba(232,115,92,0.2)'   :
+                                       'rgba(30,90,175,0.2)',
+              borderColor: isFree    ? 'rgba(255,255,255,0.15)' :
+                          isPlanner  ? 'rgba(20,184,166,0.4)'   :
+                          isBusiness ? 'rgba(232,115,92,0.4)'   :
+                                       'rgba(30,90,175,0.4)',
+              color: isFree     ? 'rgba(255,255,255,0.55)' :
+                     isPlanner  ? '#14B8A6' :
                      isBusiness ? '#E8735C' :
-                     '#60A5FA',
+                                  '#60A5FA',
             }}>
+              <span>{isFree ? '🎟' : isPlanner ? '📋' : isBusiness ? '🏢' : '🌐'}</span>
               {planLabel}
             </span>
           </div>
