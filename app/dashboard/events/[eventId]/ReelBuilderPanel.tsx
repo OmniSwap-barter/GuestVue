@@ -615,11 +615,18 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
 
         {isFailed && (
           <div className="bg-white rounded-2xl border border-red-100 p-5">
-            <p className="font-semibold text-slate-900 text-sm mb-1">Reel generation failed</p>
-            <p className="text-xs text-slate-500 mb-4">An error occurred during cloud rendering.</p>
+            <div className="flex items-start gap-3 mb-4">
+              <span className="text-2xl">❌</span>
+              <div>
+                <p className="font-semibold text-slate-900 text-sm mb-1">Reel generation failed</p>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {(latestReel as any).error_msg || 'An error occurred during cloud rendering.'}
+                </p>
+              </div>
+            </div>
             <button onClick={() => setShowBuilder(true)}
-              className="bg-[#0A4F6B] text-white font-bold px-5 py-2.5 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm">
-              Try again
+              className="w-full bg-[#0A4F6B] text-white font-bold px-5 py-2.5 rounded-xl hover:bg-[#1E5AAF] transition-all text-sm">
+              🔄 Try again
             </button>
           </div>
         )}

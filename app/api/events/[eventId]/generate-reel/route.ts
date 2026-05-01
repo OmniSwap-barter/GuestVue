@@ -258,9 +258,14 @@ function buildShotstackManifest(
       fps: 30,
       quality: 'high',
     },
-    callback: process.env.NEXT_PUBLIC_APP_URL
-      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/shotstack`
-      : undefined,
+    // Prefer explicit server-side URL → then Vercel deployment URL → then skip callback
+    callback: (() => {
+      const base =
+        process.env.APP_BASE_URL ||                              // set this in Vercel env vars
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+        (process.env.NEXT_PUBLIC_APP_URL?.startsWith('https') ? process.env.NEXT_PUBLIC_APP_URL : null)
+      return base ? `${base}/api/webhooks/shotstack` : undefined
+    })(),
   }
 }
 
@@ -440,10 +445,17 @@ export async function POST(
   const apiEnv = process.env.SHOTSTACK_ENV || 'stage'
 
   if (!apiKey) {
+    // No API key — mark as failed immediately so user sees an error (not a forever-spinner)
+    await admin.from('reels').update({
+      status: 'failed',
+      error_msg: 'Rendering is not configured yet. Contact support.',
+    }).eq('id', reel.id)
+    reel.status = 'failed'
+
     return NextResponse.json({
       reel,
       workerOnline: false,
-      message: 'Reel queued. SHOTSTACK_API_KEY not set — rendering will begin once configured.',
+      message: 'SHOTSTACK_API_KEY not set — please configure it in Vercel environment variables.',
     }, { status: 201 })
   }
 
@@ -470,7 +482,15 @@ export async function POST(
 
     if (!shotstackRes.ok) {
       const errBody = await shotstackRes.text()
-      console.error('Shotstack error:', shotstackRes.status, errBody)
+      console.error('[generate-reel] Shotstack rejected:', shotstackRes.status, errBody)
+
+      // Mark as failed so user can retry — not stuck at 'queued' forever
+      await admin.from('reels').update({
+        status: 'failed',
+        error_msg: `Render failed (HTTP ${shotstackRes.status}). Try again.`,
+      }).eq('id', reel.id)
+      reel.status = 'failed'
+
       return NextResponse.json({ reel, workerOnline: false }, { status: 201 })
     }
 
@@ -485,11 +505,25 @@ export async function POST(
 
       reel.shotstack_render_id = renderId
       reel.status = 'processing'
+    } else {
+      // Shotstack responded OK but gave no ID — unusual, mark failed
+      await admin.from('reels').update({
+        status: 'failed',
+        error_msg: 'Shotstack accepted the request but returned no render ID.',
+      }).eq('id', reel.id)
+      reel.status = 'failed'
     }
 
     return NextResponse.json({ reel, workerOnline: true }, { status: 201 })
   } catch (err) {
-    console.error('Shotstack submission failed:', err)
+    console.error('[generate-reel] Shotstack submission failed:', err)
+
+    await admin.from('reels').update({
+      status: 'failed',
+      error_msg: 'Network error while submitting to renderer. Try again.',
+    }).eq('id', reel.id)
+    reel.status = 'failed'
+
     return NextResponse.json({ reel, workerOnline: false }, { status: 201 })
   }
 }
