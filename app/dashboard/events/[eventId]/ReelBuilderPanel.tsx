@@ -587,12 +587,10 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
             <span className="text-xl">🎬</span>
             <h2 className="font-bold text-slate-900">AI Highlight Reel</h2>
           </div>
-          {(isPublished || isFailed) && (
-            <button onClick={() => setShowBuilder(true)}
-              className="text-xs font-semibold text-[#0A4F6B] border border-[#0A4F6B]/30 px-3 py-1.5 rounded-lg hover:bg-[#0A4F6B]/5 transition-all">
-              + New reel
-            </button>
-          )}
+          <button onClick={() => setShowBuilder(true)}
+            className="text-xs font-semibold text-[#0A4F6B] border border-[#0A4F6B]/30 px-3 py-1.5 rounded-lg hover:bg-[#0A4F6B]/5 transition-all">
+            + New reel
+          </button>
         </div>
 
         {isInProgress && <ProgressBanner reel={latestReel} />}
