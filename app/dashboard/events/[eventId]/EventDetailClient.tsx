@@ -255,16 +255,19 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
   }
 
   // ─── Slideshow ───────────────────────────────────────────────────────────
-  const slideshowImages = photos.filter(u => u.display_url || u.original_url)
+  // Show ALL media (photos + videos) that have a valid URL
+  const slideshowMedia = uploads.filter(u => u.display_url || u.original_url)
 
   useEffect(() => {
-    if (tab === 'slideshow' && planSupportsSlideshow && slideshowImages.length > 1) {
+    if (tab === 'slideshow' && planSupportsSlideshow && slideshowMedia.length > 1) {
+      // 4-second interval acts as a fallback for long videos;
+      // short videos auto-advance early via onEnded (see render below).
       slideTimer.current = setInterval(() => {
-        setSlideIdx(prev => (prev + 1) % slideshowImages.length)
-      }, 3000)
+        setSlideIdx(prev => (prev + 1) % slideshowMedia.length)
+      }, 4000)
     }
     return () => { if (slideTimer.current) clearInterval(slideTimer.current) }
-  }, [tab, slideshowImages.length, planSupportsSlideshow])
+  }, [tab, slideshowMedia.length, planSupportsSlideshow])
 
   // AI Reel state is now handled by ReelBuilderPanel
 
@@ -574,10 +577,10 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
                 Upgrade to Flex — ₦24,999 →
               </Link>
             </div>
-          ) : slideshowImages.length === 0 ? (
+          ) : slideshowMedia.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-100 py-16 text-center">
               <div className="text-5xl mb-3">📷</div>
-              <p className="text-slate-400 text-sm">No photos yet. Share your QR code to get started.</p>
+              <p className="text-slate-400 text-sm">No media yet. Share your QR code to get started.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -611,14 +614,36 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
 
               {/* Preview */}
               <div className="bg-black rounded-2xl overflow-hidden aspect-video relative">
-                <img
-                  key={slideIdx}
-                  src={slideshowImages[slideIdx]?.display_url || slideshowImages[slideIdx]?.original_url || ''}
-                  alt=""
-                  className="w-full h-full object-contain animate-fade"
-                />
+                {(() => {
+                  const item = slideshowMedia[slideIdx]
+                  const src = item?.display_url || item?.original_url || ''
+                  if (item?.type === 'video') {
+                    return (
+                      <video
+                        key={slideIdx}
+                        src={src}
+                        autoPlay
+                        muted
+                        playsInline
+                        className="w-full h-full object-contain"
+                        onEnded={() => {
+                          if (slideTimer.current) clearInterval(slideTimer.current)
+                          setSlideIdx(prev => (prev + 1) % slideshowMedia.length)
+                        }}
+                      />
+                    )
+                  }
+                  return (
+                    <img
+                      key={slideIdx}
+                      src={src}
+                      alt=""
+                      className="w-full h-full object-contain animate-fade"
+                    />
+                  )
+                })()}
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
-                  {slideshowImages.map((_, i) => (
+                  {slideshowMedia.map((_, i) => (
                     <button
                       key={i}
                       onClick={() => setSlideIdx(i)}
@@ -627,7 +652,7 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
                   ))}
                 </div>
                 <div className="absolute top-4 right-4 bg-black/50 text-white text-xs px-3 py-1 rounded-full">
-                  {slideIdx + 1} / {slideshowImages.length}
+                  {slideIdx + 1} / {slideshowMedia.length}
                 </div>
                 {event.hashtag && (
                   <div className="absolute bottom-10 right-4 bg-black/50 text-white text-sm font-bold px-3 py-1 rounded-full">
@@ -635,7 +660,7 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
                   </div>
                 )}
               </div>
-              <p className="text-xs text-slate-400 text-center">Preview — slides change every 3 seconds. The projector window auto-refreshes with new uploads.</p>
+              <p className="text-xs text-slate-400 text-center">Preview — photos advance every 4 seconds; videos advance when they end. The projector window auto-refreshes with new uploads.</p>
             </div>
           )}
         </div>

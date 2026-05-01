@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 interface Props {
   userId: string
   planType: string
+  isUnlimited?: boolean
 }
 
 type EventPlan = 'free' | 'flex' | 'pro'
@@ -31,8 +32,15 @@ const LOADING_MESSAGES = [
   'Almost ready…',
 ]
 
-export default function CreateEventForm({ userId, planType }: Props) {
+export default function CreateEventForm({ userId, planType, isUnlimited = false }: Props) {
   const router = useRouter()
+
+  // Paid subscription types get events without per-event payment
+  const isPaidSubscriber =
+    isUnlimited ||
+    planType === 'planner' ||
+    planType === 'business' ||
+    planType === 'corporate'
 
   // Wizard state
   const [step, setStep]             = useState<WizardStep>('type')
@@ -55,7 +63,16 @@ export default function CreateEventForm({ userId, planType }: Props) {
   function nextStep() {
     setError('')
     if (step === 'type')    setStep('details')
-    if (step === 'details') setStep('plan')
+    if (step === 'details') {
+      // Paid subscribers (planner/business/corporate or unlimited flag) skip
+      // the plan selection — their subscription covers the event cost.
+      if (isPaidSubscriber) {
+        setPlan('free')
+        handleSubmit()
+      } else {
+        setStep('plan')
+      }
+    }
     if (step === 'plan')    handleSubmit()
   }
 

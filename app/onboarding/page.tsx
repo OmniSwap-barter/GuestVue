@@ -185,6 +185,16 @@ export default function OnboardingPage() {
           <div className="bg-white rounded-2xl p-7 shadow-2xl">
             {/* Header */}
             <div className="mb-6">
+              <button
+                type="button"
+                onClick={() => { setStep('profile'); setSelectedPlan(''); setError('') }}
+                className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 mb-4 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                ← Back to profile
+              </button>
               <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#0A4F6B] bg-[#0A4F6B]/10 px-3 py-1.5 rounded-full mb-3">
                 STEP 2 OF 2
               </div>

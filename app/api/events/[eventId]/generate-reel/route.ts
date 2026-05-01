@@ -190,30 +190,36 @@ function buildShotstackManifest(
   }
 
   // ── Logo overlay ───────────────────────────────────────────────────────────
+  // NOTE: Shotstack V1 does NOT accept width/height on image assets.
+  // Sizing is controlled via `scale` (fraction of output width) at the clip level.
   if (logoUrl) {
     if (logoPosition === 'outro') {
       // Logo only in final 2 seconds — large, centered (outro card)
+      // scale: 0.37 ≈ 400px wide on 1080px output
       const outroStart = Math.max(0, totalDuration - 2)
       tracks.push({
         clips: [{
-          asset: { type: 'image', src: logoUrl, width: 400, height: 200 },
+          asset: { type: 'image', src: logoUrl },
           start: outroStart,
           length: 2,
           position: 'center',
           offset: { x: 0, y: 0.25 },
           opacity: 1,
+          scale: 0.37,
         }],
       })
     } else {
       // Throughout — small, top-right corner
+      // scale: 0.15 ≈ 160px wide on 1080px output
       tracks.push({
         clips: [{
-          asset: { type: 'image', src: logoUrl, width: 160, height: 80 },
+          asset: { type: 'image', src: logoUrl },
           start: 0,
           length: totalDuration,
           position: 'topRight',
           opacity: 0.85,
           offset: { x: -0.03, y: 0.03 },
+          scale: 0.15,
         }],
       })
     }

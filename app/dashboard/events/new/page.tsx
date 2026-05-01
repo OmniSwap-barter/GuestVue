@@ -11,7 +11,7 @@ export default async function NewEventPage() {
 
   const { data: profile } = await db
     .from('profiles')
-    .select('plan_type')
+    .select('plan_type, is_unlimited')
     .eq('id', user.id)
     .single()
 
@@ -27,7 +27,11 @@ export default async function NewEventPage() {
             Your QR code will be ready in seconds.
           </p>
         </div>
-        <CreateEventForm userId={user.id} planType={profile?.plan_type ?? 'individual'} />
+        <CreateEventForm
+          userId={user.id}
+          planType={profile?.plan_type ?? 'individual'}
+          isUnlimited={profile?.is_unlimited === true}
+        />
       </div>
     </div>
   )
