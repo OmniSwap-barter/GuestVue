@@ -168,6 +168,7 @@ export type Database = {
           full_name: string | null
           id: string
           is_admin: boolean
+          is_unlimited: boolean
           onboarding_complete: boolean
           phone: string | null
           plan_type: string
@@ -181,6 +182,7 @@ export type Database = {
           full_name?: string | null
           id: string
           is_admin?: boolean
+          is_unlimited?: boolean
           onboarding_complete?: boolean
           phone?: string | null
           plan_type?: string
@@ -194,6 +196,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_admin?: boolean
+          is_unlimited?: boolean
           onboarding_complete?: boolean
           phone?: string | null
           plan_type?: string
@@ -206,13 +209,16 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          draft_url: string | null
           error_msg: string | null
           event_id: string
           formats: Json | null
           id: string
           music_track: string | null
           output_url: string | null
+          published_to_gallery: boolean
           retry_count: number
+          shotstack_render_id: string | null
           status: string
           type: string
           upload_ids: string[]
@@ -220,13 +226,16 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
+          draft_url?: string | null
           error_msg?: string | null
           event_id: string
           formats?: Json | null
           id?: string
           music_track?: string | null
           output_url?: string | null
+          published_to_gallery?: boolean
           retry_count?: number
+          shotstack_render_id?: string | null
           status?: string
           type: string
           upload_ids?: string[]
@@ -234,13 +243,16 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
+          draft_url?: string | null
           error_msg?: string | null
           event_id?: string
           formats?: Json | null
           id?: string
           music_track?: string | null
           output_url?: string | null
+          published_to_gallery?: boolean
           retry_count?: number
+          shotstack_render_id?: string | null
           status?: string
           type?: string
           upload_ids?: string[]
