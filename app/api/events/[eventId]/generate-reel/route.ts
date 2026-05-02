@@ -195,16 +195,18 @@ export async function POST(
 
   // ── Dispatch: BullMQ (primary) → Railway HTTP (fallback) ──────────────────
 
-  // Path 1: BullMQ via Upstash Redis
+  // Path 1: BullMQ via Upstash Redis (10 s timeout so a hung ioredis never blocks)
   if (isQueueAvailable()) {
     try {
-      const jobId = await enqueueGenerateReel(jobPayload)
+      const timeout = new Promise<null>(resolve => setTimeout(() => resolve(null), 10_000))
+      const jobId = await Promise.race([enqueueGenerateReel(jobPayload), timeout])
       if (jobId) {
         await admin.from('reels').update({ status: 'processing' }).eq('id', reel.id)
         reel.status = 'processing'
         console.log(`[generate-reel] BullMQ job ${jobId} queued for reel ${reel.id}`)
         return NextResponse.json({ reel, workerOnline: true, engine: 'bullmq' }, { status: 201 })
       }
+      console.warn('[generate-reel] BullMQ returned null/timeout — trying HTTP fallback')
     } catch (err) {
       console.error('[generate-reel] BullMQ enqueue failed, trying HTTP fallback:', err)
     }

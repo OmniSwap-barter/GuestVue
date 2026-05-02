@@ -245,8 +245,8 @@ function ProgressBanner({ reel }: { reel: Reel }) {
 
         <p className="text-white/40 text-xs mt-3">
           {rawStatus === 'queued'
-            ? 'Your reel is next in queue. Processing starts shortly.'
-            : 'Rendering in the cloud at 1080×1920 (9:16). This page updates automatically.'}
+            ? 'Your reel is next in queue — FFmpeg rendering starts shortly.'
+            : 'FFmpeg is rendering your reel at 1080×1920. This page refreshes automatically every 6 s.'}
         </p>
         <p className="text-white/30 text-xs mt-1">
           Queued {new Date(reel.created_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
@@ -519,20 +519,28 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
         ? { title: textTitle || undefined, caption: textCaption || undefined, outro: textOutro || undefined }
         : null
 
-      const res = await fetch(`/api/events/${event.id}/generate-reel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uploadIds: validIds,
-          musicTrack,
-          removeWatermark,
-          logoUrl: resolvedLogoUrl,
-          theme: selectedTheme,
-          transition: selectedTransition,
-          textOverlays,
-          logoPosition,
-        }),
-      })
+      const controller = new AbortController()
+      const abortTimer = setTimeout(() => controller.abort(), 30_000)
+      let res: Response
+      try {
+        res = await fetch(`/api/events/${event.id}/generate-reel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            uploadIds: validIds,
+            musicTrack,
+            removeWatermark,
+            logoUrl: resolvedLogoUrl,
+            theme: selectedTheme,
+            transition: selectedTransition,
+            textOverlays,
+            logoPosition,
+          }),
+        })
+      } finally {
+        clearTimeout(abortTimer)
+      }
 
       const data = await res.json()
 
@@ -549,7 +557,10 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
       setShowBuilder(false)
     } catch (err: any) {
       setBuilderStatus('error')
-      setErrorMsg(err?.message || 'Reel generation failed. Please try again.')
+      const msg = err?.name === 'AbortError'
+        ? 'Request timed out. Check your connection and try again.'
+        : err?.message || 'Reel generation failed. Please try again.'
+      setErrorMsg(msg)
     }
   }
 
@@ -1071,8 +1082,8 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Cloud-rendered at <strong className="text-slate-700">1080×1920 (9:16)</strong> with Shotstack.
-              Takes 5–15 minutes. Your draft appears here — preview before publishing to the gallery.
+              Cloud-rendered at <strong className="text-slate-700">1080×1920 (9:16)</strong> via FFmpeg.
+              Usually ready in 2–5 minutes. Your draft appears here — preview before publishing to the gallery.
             </p>
           </div>
         </div>

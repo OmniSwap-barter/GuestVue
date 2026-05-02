@@ -56,6 +56,8 @@ function getRedis(): IORedis | null {
     _redis = new IORedis(url, {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
+      connectTimeout: 6_000,   // give up connecting after 6 s — prevents Vercel fn hangs
+      commandTimeout: 8_000,   // per-command deadline
       tls: url.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
     })
     _redis.on('error', (err) => {
