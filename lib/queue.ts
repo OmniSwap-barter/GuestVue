@@ -11,7 +11,8 @@
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Queue, QueueOptions } from 'bullmq'
+import { Queue } from 'bullmq'
+import IORedis from 'ioredis'
 
 // ── Queue names ───────────────────────────────────────────────────────────────
 export const QUEUE_GENERATE_REEL    = 'generate-reel'
@@ -40,28 +41,48 @@ export interface ProcessUploadJobData {
   plan: string
 }
 
-// ── Singleton connection (lazy) ───────────────────────────────────────────────
+// ── Singleton IORedis connection (lazy) ───────────────────────────────────────
+// BullMQ requires the URL to be passed as a constructor argument to IORedis,
+// NOT as a `{ url }` options object — that silently fails.
+// maxRetriesPerRequest: null is required by BullMQ.
+// enableReadyCheck: false is recommended for Upstash.
+let _redis: IORedis | null = null
+
+function getRedis(): IORedis | null {
+  if (_redis) return _redis
+  const url = process.env.REDIS_URL
+  if (!url) return null
+  try {
+    _redis = new IORedis(url, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      tls: url.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+    })
+    _redis.on('error', (err) => {
+      console.error('[queue] Redis connection error:', err.message)
+    })
+    return _redis
+  } catch (err) {
+    console.error('[queue] Failed to create Redis connection:', err)
+    return null
+  }
+}
+
+// ── Singleton queues (lazy) ───────────────────────────────────────────────────
 let _reelQueue: Queue<GenerateReelJobData> | null = null
 let _uploadQueue: Queue<ProcessUploadJobData> | null = null
 
-function getConnection(): QueueOptions['connection'] | null {
-  const url = process.env.REDIS_URL
-  if (!url) return null
-  // ioredis connection from URL string — BullMQ accepts this directly
-  return { url } as unknown as QueueOptions['connection']
-}
-
 function getReelQueue(): Queue<GenerateReelJobData> | null {
   if (_reelQueue) return _reelQueue
-  const connection = getConnection()
+  const connection = getRedis()
   if (!connection) return null
   _reelQueue = new Queue<GenerateReelJobData>(QUEUE_GENERATE_REEL, {
     connection,
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'exponential', delay: 10_000 },
-      removeOnComplete: { age: 86_400 }, // keep 24h
-      removeOnFail: { age: 7 * 86_400 }, // keep 7 days
+      removeOnComplete: { age: 86_400 },     // keep 24 h
+      removeOnFail:     { age: 7 * 86_400 }, // keep 7 days
     },
   })
   return _reelQueue
@@ -69,7 +90,7 @@ function getReelQueue(): Queue<GenerateReelJobData> | null {
 
 function getUploadQueue(): Queue<ProcessUploadJobData> | null {
   if (_uploadQueue) return _uploadQueue
-  const connection = getConnection()
+  const connection = getRedis()
   if (!connection) return null
   _uploadQueue = new Queue<ProcessUploadJobData>(QUEUE_PROCESS_UPLOAD, {
     connection,
@@ -77,7 +98,7 @@ function getUploadQueue(): Queue<ProcessUploadJobData> | null {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5_000 },
       removeOnComplete: { age: 3_600 },
-      removeOnFail: { age: 86_400 },
+      removeOnFail:     { age: 86_400 },
     },
   })
   return _uploadQueue
@@ -87,14 +108,14 @@ function getUploadQueue(): Queue<ProcessUploadJobData> | null {
 
 /**
  * Enqueue a reel generation job.
- * Returns the BullMQ job ID, or null if Redis is not configured.
+ * Returns the BullMQ job ID, or null if Redis is not configured / unreachable.
  */
 export async function enqueueGenerateReel(data: GenerateReelJobData): Promise<string | null> {
   const queue = getReelQueue()
   if (!queue) return null
   try {
     const job = await queue.add('generate-reel', data, {
-      jobId: `reel:${data.reelId}`, // idempotent — duplicate calls are safe
+      jobId: `reel:${data.reelId}`, // idempotent — safe to retry
     })
     return job.id ?? null
   } catch (err) {
@@ -105,7 +126,7 @@ export async function enqueueGenerateReel(data: GenerateReelJobData): Promise<st
 
 /**
  * Enqueue an upload processing job.
- * Returns the BullMQ job ID, or null if Redis is not configured.
+ * Returns the BullMQ job ID, or null if Redis is not configured / unreachable.
  */
 export async function enqueueProcessUpload(data: ProcessUploadJobData): Promise<string | null> {
   const queue = getUploadQueue()
