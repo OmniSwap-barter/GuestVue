@@ -501,11 +501,19 @@ async function buildFFmpegReel({
   console.log(`[reel] FFmpeg: ${mediaFiles.length} clips, ${totalDuration.toFixed(1)}s, music=${!!musicPath}, logo=${!!logoPath}`)
 
   try {
-    await execFileAsync('ffmpeg', cmd, { maxBuffer: 100 * 1024 * 1024 })
+    const { stdout, stderr } = await execFileAsync('ffmpeg', cmd, { maxBuffer: 100 * 1024 * 1024 })
+    if (stderr) console.log('[reel] FFmpeg stderr:', stderr.slice(-1000))
   } catch (err: any) {
+    // Capture full error detail — stderr contains the real FFmpeg error
+    const ffStderr = (err.stderr ?? '').trim()
+    const ffMsg    = (err.message ?? '').trim()
+    const detail   = ffStderr || ffMsg || 'unknown ffmpeg error'
+    console.error('[reel] FFmpeg error:', detail)
+
     if (!existsSync(outputPath)) {
-      const ffErr = (err.stderr ?? err.message ?? '').slice(-800)
-      throw new Error(`FFmpeg failed:\n${ffErr}`)
+      // Grab the last 600 chars of stderr (the actual error is always at the end)
+      const tail = ffStderr ? ffStderr.slice(-600) : ffMsg.slice(-600)
+      throw new Error(`FFmpeg failed: ${tail}`)
     }
     console.warn('[reel] FFmpeg exited non-zero but output exists — proceeding')
   }
