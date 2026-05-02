@@ -17,6 +17,7 @@
 
 import express from 'express'
 import { Worker, type Job } from 'bullmq'
+import IORedis from 'ioredis'
 import { processUpload } from './jobs/process-upload'
 import { generateReel, type GenerateReelArgs } from './jobs/generate-reel'
 
@@ -97,7 +98,16 @@ app.listen(PORT, () => {
 if (process.env.REDIS_URL) {
   console.log('[worker] REDIS_URL detected — starting BullMQ consumers')
 
-  const connection = { url: process.env.REDIS_URL }
+  // Must use new IORedis(url) — passing { url } as options silently fails
+  const redisUrl = process.env.REDIS_URL
+  const connection = new IORedis(redisUrl, {
+    maxRetriesPerRequest: null,   // required by BullMQ workers
+    enableReadyCheck: false,      // required for Upstash
+    tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+  })
+  connection.on('error', (err: Error) => {
+    console.error('[bullmq] Redis connection error:', err.message)
+  })
 
   // ── Reel generation consumer ─────────────────────────────────────────────
   const reelWorker = new Worker<GenerateReelArgs>(
