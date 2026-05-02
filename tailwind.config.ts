@@ -9,6 +9,25 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // ── Premium dark palette (Engineering Directive) ──────────────────
+        obsidian: {
+          DEFAULT: '#0B0B0B',
+          50:  '#1a1a1a',
+          100: '#141414',
+          200: '#0f0f0f',
+          900: '#0B0B0B',
+        },
+        gold: {
+          DEFAULT: '#D4AF37',
+          50:  '#fdf6dc',
+          100: '#f9e99e',
+          200: '#f4d962',
+          300: '#D4AF37',
+          400: '#b8941e',
+          500: '#977910',
+          600: '#7a5f0a',
+        },
+        // ── Original palette ──────────────────────────────────────────────
         ocean: {
           DEFAULT: '#0A4F6B',
           400: '#0D6687',

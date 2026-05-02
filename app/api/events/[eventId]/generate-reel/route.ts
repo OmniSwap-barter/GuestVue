@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
+import { enqueueGenerateReel, isQueueAvailable, type GenerateReelJobData } from '@/lib/queue'
 
 // ── Music track URLs ──────────────────────────────────────────────────────────
 // Use NEXT_PUBLIC_APP_URL-relative paths served from /public/music/ OR
@@ -293,6 +294,27 @@ function normalizeShotstackEnv(raw: string | undefined): string {
   return 'stage'
 }
 
+// ── Dispatch to Railway worker via HTTP ───────────────────────────────────────
+async function dispatchToWorkerHTTP(reelId: string, eventId: string, type: string) {
+  const workerUrl = process.env.RAILWAY_WORKER_URL
+  const workerSecret = process.env.WORKER_SECRET
+  if (!workerUrl || !workerSecret) return false
+  try {
+    const res = await fetch(`${workerUrl}/jobs/generate-reel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-worker-secret': workerSecret,
+      },
+      body: JSON.stringify({ reelId, eventId, type }),
+    })
+    return res.ok
+  } catch (err) {
+    console.error('[generate-reel] Worker HTTP dispatch failed:', err)
+    return false
+  }
+}
+
 // ── Route ─────────────────────────────────────────────────────────────────────
 export async function POST(
   req: NextRequest,
@@ -455,22 +477,70 @@ export async function POST(
 
   if (reelErr) return NextResponse.json({ error: 'Failed to queue reel' }, { status: 500 })
 
-  // ── Submit to Shotstack ────────────────────────────────────────────────────
+  // ── Dispatch chain: BullMQ → Railway HTTP → Shotstack ────────────────────
+  //
+  // Priority 1: Redis is configured → enqueue to BullMQ (Railway worker consumes)
+  // Priority 2: RAILWAY_WORKER_URL is set → direct HTTP dispatch to worker
+  // Priority 3: SHOTSTACK_API_KEY is set → Shotstack cloud renderer
+  // Fallback: mark failed with helpful message
+  //
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Path 1: BullMQ via Redis ───────────────────────────────────────────────
+  if (isQueueAvailable()) {
+    try {
+      const jobData: GenerateReelJobData = {
+        reelId: reel.id,
+        eventId,
+        type: reelType,
+        uploadIds,
+        musicTrack,
+        removeWatermark,
+        logoUrl,
+        logoPosition,
+        theme,
+        transition,
+        textOverlays,
+      }
+
+      const jobId = await enqueueGenerateReel(jobData)
+
+      if (jobId) {
+        await admin.from('reels').update({ status: 'processing' }).eq('id', reel.id)
+        reel.status = 'processing'
+        console.log(`[generate-reel] Enqueued BullMQ job ${jobId} for reel ${reel.id}`)
+        return NextResponse.json({ reel, workerOnline: true, engine: 'bullmq' }, { status: 201 })
+      }
+    } catch (err) {
+      console.error('[generate-reel] BullMQ enqueue failed, falling through:', err)
+    }
+  }
+
+  // ── Path 2: Railway worker HTTP ────────────────────────────────────────────
+  if (process.env.RAILWAY_WORKER_URL && process.env.WORKER_SECRET) {
+    const dispatched = await dispatchToWorkerHTTP(reel.id, eventId, reelType)
+    if (dispatched) {
+      await admin.from('reels').update({ status: 'processing' }).eq('id', reel.id)
+      reel.status = 'processing'
+      console.log(`[generate-reel] Dispatched to Railway worker (HTTP) for reel ${reel.id}`)
+      return NextResponse.json({ reel, workerOnline: true, engine: 'railway-http' }, { status: 201 })
+    }
+  }
+
+  // ── Path 3: Shotstack fallback ─────────────────────────────────────────────
   const apiKey = process.env.SHOTSTACK_API_KEY
   const apiEnv = normalizeShotstackEnv(process.env.SHOTSTACK_ENV)
 
   if (!apiKey) {
-    // No API key — mark as failed immediately so user sees an error (not a forever-spinner)
     await admin.from('reels').update({
       status: 'failed',
-      error_msg: 'Rendering is not configured yet. Contact support.',
+      error_msg: 'No rendering engine configured. Set REDIS_URL, RAILWAY_WORKER_URL, or SHOTSTACK_API_KEY.',
     }).eq('id', reel.id)
     reel.status = 'failed'
-
     return NextResponse.json({
       reel,
       workerOnline: false,
-      message: 'SHOTSTACK_API_KEY not set — please configure it in Vercel environment variables.',
+      message: 'No rendering engine is configured. Contact support.',
     }, { status: 201 })
   }
 
@@ -499,31 +569,24 @@ export async function POST(
       const errBody = await shotstackRes.text()
       console.error('[generate-reel] Shotstack rejected:', shotstackRes.status, errBody)
 
-      // Include Shotstack's full error so we can diagnose from the UI
-      const errMsg = `Shotstack HTTP ${shotstackRes.status}: ${errBody.slice(0, 300)}`
-
       await admin.from('reels').update({
         status: 'failed',
-        error_msg: errMsg,
+        error_msg: `Shotstack HTTP ${shotstackRes.status}: ${errBody.slice(0, 300)}`,
       }).eq('id', reel.id)
       reel.status = 'failed'
-
-      return NextResponse.json({ reel, workerOnline: false }, { status: 201 })
+      return NextResponse.json({ reel, workerOnline: false, engine: 'shotstack' }, { status: 201 })
     }
 
     const shotstackBody = await shotstackRes.json()
     const renderId: string = shotstackBody?.response?.id
 
     if (renderId) {
-      await admin
-        .from('reels')
+      await admin.from('reels')
         .update({ shotstack_render_id: renderId, status: 'processing' })
         .eq('id', reel.id)
-
       reel.shotstack_render_id = renderId
       reel.status = 'processing'
     } else {
-      // Shotstack responded OK but gave no ID — unusual, mark failed
       await admin.from('reels').update({
         status: 'failed',
         error_msg: 'Shotstack accepted the request but returned no render ID.',
@@ -531,16 +594,14 @@ export async function POST(
       reel.status = 'failed'
     }
 
-    return NextResponse.json({ reel, workerOnline: true }, { status: 201 })
+    return NextResponse.json({ reel, workerOnline: true, engine: 'shotstack' }, { status: 201 })
   } catch (err) {
     console.error('[generate-reel] Shotstack submission failed:', err)
-
     await admin.from('reels').update({
       status: 'failed',
       error_msg: 'Network error while submitting to renderer. Try again.',
     }).eq('id', reel.id)
     reel.status = 'failed'
-
-    return NextResponse.json({ reel, workerOnline: false }, { status: 201 })
+    return NextResponse.json({ reel, workerOnline: false, engine: 'shotstack' }, { status: 201 })
   }
 }
