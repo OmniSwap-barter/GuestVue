@@ -3,11 +3,11 @@
 // consume them asynchronously via BullMQ.
 //
 // If REDIS_URL is not set, all enqueue calls are no-ops and return null,
-// so callers can fall back to Shotstack or direct HTTP dispatch.
+// so callers fall back to direct Railway HTTP dispatch.
 //
 // Usage:
 //   const jobId = await enqueueGenerateReel({ reelId, eventId, type, ... })
-//   if (!jobId) { /* fallback to Shotstack */ }
+//   if (!jobId) { /* fallback: Railway HTTP */ }
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
