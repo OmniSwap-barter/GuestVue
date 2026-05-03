@@ -1,8 +1,8 @@
 FROM node:20-slim
 
-# Install FFmpeg + curl (needed for some fetch operations)
+# Install FFmpeg, fonts, and curl
 RUN apt-get update && \
-    apt-get install -y ffmpeg curl && \
+    apt-get install -y ffmpeg curl fonts-dejavu-core && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

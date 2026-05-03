@@ -391,6 +391,8 @@ async function buildFFmpegReel({
   }
 
   // 3. drawtext overlays (chained via comma)
+  // fontfile= is required when fontconfig is unavailable (e.g. ffmpeg-static, slim containers)
+  const FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
   const dts: string[] = []
 
   function safeDt(txt: string) {
@@ -399,7 +401,7 @@ async function buildFFmpegReel({
 
   if (textOverlays?.title) {
     dts.push(
-      `drawtext=text='${safeDt(textOverlays.title)}':fontsize=72:fontcolor=white:`
+      `drawtext=fontfile='${FONT}':text='${safeDt(textOverlays.title)}':fontsize=72:fontcolor=white:`
       + `x=(w-text_w)/2:y=h*0.18:shadowcolor=black:shadowx=2:shadowy=3:`
       + `enable='between(t,0,3.5)'`
     )
@@ -408,7 +410,7 @@ async function buildFFmpegReel({
     const cs = Math.max(0, totalDuration / 2 - 2).toFixed(2)
     const ce = (parseFloat(cs) + 4).toFixed(2)
     dts.push(
-      `drawtext=text='${safeDt(textOverlays.caption)}':fontsize=56:fontcolor=white:`
+      `drawtext=fontfile='${FONT}':text='${safeDt(textOverlays.caption)}':fontsize=56:fontcolor=white:`
       + `x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.55:boxborderw=16:`
       + `enable='between(t,${cs},${ce})'`
     )
@@ -416,20 +418,20 @@ async function buildFFmpegReel({
   if (textOverlays?.outro) {
     const os = Math.max(0, totalDuration - 4).toFixed(2)
     dts.push(
-      `drawtext=text='${safeDt(textOverlays.outro)}':fontsize=64:fontcolor=white:`
+      `drawtext=fontfile='${FONT}':text='${safeDt(textOverlays.outro)}':fontsize=64:fontcolor=white:`
       + `x=(w-text_w)/2:y=h*0.65:shadowcolor=black:shadowx=2:shadowy=3:`
       + `enable='between(t,${os},${totalDuration.toFixed(2)})'`
     )
   }
   if (eventHashtag) {
     dts.push(
-      `drawtext=text='${safeDt('#' + eventHashtag)}':fontsize=40:fontcolor=white:`
+      `drawtext=fontfile='${FONT}':text='${safeDt('#' + eventHashtag)}':fontsize=40:fontcolor=white:`
       + `x=(w-text_w)/2:y=h-90:shadowcolor=black:shadowx=1:shadowy=2`
     )
   }
   if (!removeWatermark) {
     dts.push(
-      `drawtext=text='Powered by GuestVue':fontsize=26:fontcolor=white@0.60:`
+      `drawtext=fontfile='${FONT}':text='Powered by GuestVue':fontsize=26:fontcolor=white@0.60:`
       + `x=20:y=h-55`
     )
   }
