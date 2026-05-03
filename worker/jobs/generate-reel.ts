@@ -15,8 +15,14 @@ import { tmpdir } from 'os'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../../types/database'
+// ffmpeg-static bundles a static FFmpeg binary — no system install needed
+import ffmpegStatic from 'ffmpeg-static'
 
 const execFileAsync = promisify(execFile)
+
+// Use bundled ffmpeg binary, fall back to system ffmpeg if somehow available
+const FFMPEG_BIN = ffmpegStatic || 'ffmpeg'
+console.log(`[worker] FFmpeg binary: ${FFMPEG_BIN}`)
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -501,7 +507,7 @@ async function buildFFmpegReel({
   console.log(`[reel] FFmpeg: ${mediaFiles.length} clips, ${totalDuration.toFixed(1)}s, music=${!!musicPath}, logo=${!!logoPath}`)
 
   try {
-    const { stdout, stderr } = await execFileAsync('ffmpeg', cmd, { maxBuffer: 100 * 1024 * 1024 })
+    const { stdout, stderr } = await execFileAsync(FFMPEG_BIN, cmd, { maxBuffer: 100 * 1024 * 1024 })
     if (stderr) console.log('[reel] FFmpeg stderr:', stderr.slice(-1000))
   } catch (err: any) {
     // Capture full error detail — stderr contains the real FFmpeg error
