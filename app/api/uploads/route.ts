@@ -1,28 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { randomUUID } from 'crypto'
 
 const MAX_PHOTO_BYTES = 20 * 1024 * 1024   // 20 MB
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024  // 200 MB
 
-// Lazy-initialise S3/R2 client
-function getR2Client() {
-  return new S3Client({
-    region: 'auto',
-    endpoint: process.env.R2_ENDPOINT || `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
-    // AWS SDK v3 ≥3.525 adds CRC32 checksums by default; R2 rejects them.
-    requestChecksumCalculation: 'WHEN_REQUIRED',
-    responseChecksumValidation: 'WHEN_REQUIRED',
-  })
-}
+// Supabase Storage bucket for guest uploads (public bucket, no R2 credentials needed)
+const STORAGE_BUCKET = 'event-uploads'
 
 // Simple IP-based rate limiting via Supabase (5 uploads/IP/minute)
-// In production, use BullMQ + Redis for this — this is a lightweight fallback
 async function checkRateLimit(supabase: ReturnType<typeof createAdminClient>, ipHash: string) {
   const since = new Date(Date.now() - 60_000).toISOString()
   const { count } = await supabase
@@ -35,8 +21,20 @@ async function checkRateLimit(supabase: ReturnType<typeof createAdminClient>, ip
 }
 
 function hashIp(ip: string): string {
-  // Simple hash — in production use crypto.subtle with a server secret
   return Buffer.from(ip).toString('base64').slice(0, 32)
+}
+
+// Ensure the storage bucket exists (idempotent)
+async function ensureBucket(supabase: ReturnType<typeof createAdminClient>) {
+  const { error } = await supabase.storage.createBucket(STORAGE_BUCKET, {
+    public: true,
+    fileSizeLimit: MAX_VIDEO_BYTES,
+    allowedMimeTypes: ['image/*', 'video/*'],
+  })
+  // Ignore "already exists" errors
+  if (error && !error.message.includes('already exists') && !error.message.includes('duplicate')) {
+    console.warn('[upload] Could not create bucket (may already exist):', error.message)
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -102,52 +100,43 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Upload to R2 ──────────────────────────────────────────────────────────
+    // ── Upload to Supabase Storage ────────────────────────────────────────────
     const ext = file.name.split('.').pop()?.toLowerCase() || (isVideo ? 'mp4' : 'jpg')
-    const key = `events/${eventId}/originals/${randomUUID()}.${ext}`
+    const storagePath = `events/${eventId}/originals/${randomUUID()}.${ext}`
     const bytes = await file.arrayBuffer()
 
-    const r2 = getR2Client()
-    try {
-      await r2.send(
-        new PutObjectCommand({
-          Bucket: process.env.R2_BUCKET_NAME || 'claude-guestvue',
-          Key: key,
-          Body: Buffer.from(bytes),
-          ContentType: file.type,
-          Metadata: {
-            eventId,
-            // URL-encode so filenames with spaces/unicode are valid HTTP header values
-            originalName: encodeURIComponent(file.name),
-          },
-        })
-      )
-    } catch (r2Err: unknown) {
-      const msg = r2Err instanceof Error ? r2Err.message : String(r2Err)
-      console.error('R2 upload failed:', {
-        message: msg,
-        bucket: process.env.R2_BUCKET_NAME,
-        endpoint: process.env.R2_ENDPOINT,
-        keyId: process.env.R2_ACCESS_KEY_ID?.slice(0, 8),
+    // Ensure bucket exists (creates if missing, no-op if already there)
+    await ensureBucket(supabase)
+
+    const { error: storageError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(storagePath, Buffer.from(bytes), {
+        contentType: file.type,
+        upsert: false,
       })
+
+    if (storageError) {
+      console.error('[upload] Supabase Storage upload failed:', storageError.message)
       return NextResponse.json(
-        { error: `Upload storage error: ${msg}` },
+        { error: `Upload failed: ${storageError.message}` },
         { status: 500 }
       )
     }
 
-    const originalUrl = `${process.env.R2_PUBLIC_URL || 'https://pub-81436af2ca3a49feb0bc7261118c4f17.r2.dev'}/${key}`
+    // Build public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(storagePath)
+
+    const originalUrl = publicUrl
 
     // ── Insert upload row ─────────────────────────────────────────────────────
-    // Status is 'ready' immediately so gallery/slideshow work without the worker.
-    // When the Railway worker processes the file, it will update display_url and
-    // can leave status as 'ready' (compression is an enhancement, not a gate).
     const { data: uploadRow, error: insertError } = await supabase
       .from('uploads')
       .insert({
         event_id: eventId,
         original_url: originalUrl,
-        display_url: originalUrl, // worker will overwrite with compressed version later
+        display_url: originalUrl,
         type: isVideo ? 'video' : 'photo',
         size_bytes: file.size,
         duration_secs: null,
@@ -168,7 +157,6 @@ export async function POST(req: NextRequest) {
     await supabase.rpc('increment_upload_count', { event_id_input: eventId })
       .then(({ error }) => {
         if (error) {
-          // RPC missing — fall back to direct SQL increment
           return supabase
             .from('events')
             .update({ upload_count: (event.upload_count ?? 0) + 1 })
@@ -176,7 +164,7 @@ export async function POST(req: NextRequest) {
         }
       })
 
-    // ── Dispatch to Railway worker (fire-and-forget) ───────────────────────────
+    // ── Dispatch to Railway worker for compression (fire-and-forget) ──────────
     if (process.env.RAILWAY_WORKER_URL && process.env.WORKER_SECRET) {
       fetch(`${process.env.RAILWAY_WORKER_URL}/jobs/process-upload`, {
         method: 'POST',
@@ -187,7 +175,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           uploadId: uploadRow.id,
           eventId,
-          key,
+          key: storagePath,
           type: isVideo ? 'video' : 'photo',
           plan: event.plan,
         }),
@@ -201,7 +189,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Need to handle large file uploads
+// Handle large file uploads
 export const config = {
   api: { bodyParser: false },
 }
