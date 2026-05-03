@@ -170,3 +170,4 @@ if (process.env.REDIS_URL) {
 } else {
   console.log('[worker] REDIS_URL not set — HTTP-only dispatch mode')
 }
+
