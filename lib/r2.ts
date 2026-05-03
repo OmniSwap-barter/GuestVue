@@ -16,8 +16,8 @@ function getClient(): S3Client {
   })
 }
 
-const BUCKET = process.env.R2_BUCKET_NAME || 'guestvue-media'
-const PUBLIC_URL = process.env.R2_PUBLIC_URL || 'https://media.guestvue.com'
+const BUCKET = process.env.R2_BUCKET_NAME || 'claude-guestvue'
+const PUBLIC_URL = process.env.R2_PUBLIC_URL || 'https://pub-81436af2ca3a49feb0bc7261118c4f17.r2.dev'
 
 // ── Upload a buffer to R2 ─────────────────────────────────────────────────────
 export async function uploadToR2({

@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
     try {
       await r2.send(
         new PutObjectCommand({
-          Bucket: process.env.R2_BUCKET_NAME!,
+          Bucket: process.env.R2_BUCKET_NAME || 'claude-guestvue',
           Key: key,
           Body: Buffer.from(bytes),
           ContentType: file.type,
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const originalUrl = `${process.env.R2_PUBLIC_URL}/${key}`
+    const originalUrl = `${process.env.R2_PUBLIC_URL || 'https://pub-81436af2ca3a49feb0bc7261118c4f17.r2.dev'}/${key}`
 
     // ── Insert upload row ─────────────────────────────────────────────────────
     // Status is 'ready' immediately so gallery/slideshow work without the worker.
