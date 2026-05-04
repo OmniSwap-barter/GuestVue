@@ -508,21 +508,60 @@ async function buildFFmpegReel({
 
   console.log(`[reel] FFmpeg: ${mediaFiles.length} clips, ${totalDuration.toFixed(1)}s, music=${!!musicPath}, logo=${!!logoPath}`)
 
-  try {
-    const { stdout, stderr } = await execFileAsync(FFMPEG_BIN, cmd, { maxBuffer: 100 * 1024 * 1024 })
-    if (stderr) console.log('[reel] FFmpeg stderr:', stderr.slice(-1000))
-  } catch (err: any) {
-    // Capture full error detail — stderr contains the real FFmpeg error
-    const ffStderr = (err.stderr ?? '').trim()
-    const ffMsg    = (err.message ?? '').trim()
-    const detail   = ffStderr || ffMsg || 'unknown ffmpeg error'
-    console.error('[reel] FFmpeg error:', detail)
-
-    if (!existsSync(outputPath)) {
-      // Grab the last 600 chars of stderr (the actual error is always at the end)
-      const tail = ffStderr ? ffStderr.slice(-600) : ffMsg.slice(-600)
-      throw new Error(`FFmpeg failed: ${tail}`)
+  const runFFmpeg = async (args: string[]) => {
+    try {
+      const { stderr } = await execFileAsync(FFMPEG_BIN, args, { maxBuffer: 100 * 1024 * 1024 })
+      if (stderr) console.log('[reel] FFmpeg stderr:', stderr.slice(-500))
+      return true
+    } catch (err: any) {
+      const ffStderr = (err.stderr ?? '').trim()
+      const ffMsg    = (err.message ?? '').trim()
+      console.error('[reel] FFmpeg error:', (ffStderr || ffMsg).slice(-800))
+      if (existsSync(outputPath)) {
+        console.warn('[reel] FFmpeg non-zero exit but output exists — proceeding')
+        return true
+      }
+      return ffStderr || ffMsg || 'FFmpeg failed'
     }
-    console.warn('[reel] FFmpeg exited non-zero but output exists — proceeding')
+  }
+
+  // First attempt: full command with text overlays
+  let result = await runFFmpeg(cmd)
+
+  // Fallback: strip ALL drawtext filters if fonts aren't available
+  if (result !== true) {
+    const firstErr = String(result)
+    console.warn('[reel] Retrying without text overlays (font issue detected)')
+
+    // Rebuild filter_complex without any drawtext
+    const fpNoText = fp.filter(f => !f.includes('drawtext'))
+
+    // If videoLabel wasn't 'vfinal' in the no-text graph, alias it
+    const hasVfinal = fpNoText.some(f => f.includes('[vfinal]'))
+    if (!hasVfinal) {
+      // Find last label produced
+      const lastLabel = audioLabel ? videoLabel : videoLabel
+      if (lastLabel !== 'vfinal') fpNoText.push(`[${lastLabel}]copy[vfinal]`)
+    }
+
+    const cmdNoText = [
+      ...inputArgs,
+      '-filter_complex', fpNoText.join(';\n'),
+      '-map', '[vfinal]',
+    ]
+    if (audioLabel) cmdNoText.push('-map', `[${audioLabel}]`, '-c:a', 'aac', '-b:a', '192k')
+    else cmdNoText.push('-an')
+    cmdNoText.push(
+      '-c:v', 'libx264', '-crf', '22', '-preset', 'fast',
+      '-profile:v', 'high', '-level', '4.1', '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart', '-t', totalDuration.toFixed(3),
+      '-y', outputPath,
+    )
+
+    result = await runFFmpeg(cmdNoText)
+    if (result !== true) {
+      throw new Error(`FFmpeg failed: ${String(result).slice(-600)}`)
+    }
+    console.log('[reel] Completed without text overlays (add fonts to fix)')
   }
 }
