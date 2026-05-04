@@ -75,16 +75,24 @@ export default function QRCustomizer({ event }: Props) {
   async function downloadCard() {
     setDownloading(true)
     try {
-      const html2canvas = (window as any).html2canvas
-      if (html2canvas && cardRef.current) {
-        const canvas = await html2canvas(cardRef.current, { scale: 3, useCORS: true, backgroundColor: null })
-        const link = document.createElement('a')
-        link.download = `${event.name.replace(/\s+/g, '_')}_QR_Card.png`
-        link.href = canvas.toDataURL('image/png')
-        link.click()
-      } else {
-        window.print()
+      if (!cardRef.current) return
+      // Lazy-load html2canvas if not already available
+      if (!(window as any).html2canvas) {
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement('script')
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'
+          s.onload = () => resolve()
+          s.onerror = reject
+          document.head.appendChild(s)
+        })
       }
+      const canvas = await (window as any).html2canvas(cardRef.current, {
+        scale: 3, useCORS: true, backgroundColor: null, logging: false,
+      })
+      const link = document.createElement('a')
+      link.download = `${event.name.replace(/\s+/g, '_')}_QR_Card.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
     } finally {
       setDownloading(false)
     }
@@ -94,8 +102,29 @@ export default function QRCustomizer({ event }: Props) {
 
   return (
     <>
-      {/* html2canvas for card PNG download */}
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" async />
+      {/* print CSS: isolate QR card, force background colors */}
+      <style>{`
+        @media print {
+          body > * { visibility: hidden !important; }
+          header, nav, footer, aside { display: none !important; }
+          #guestvue-qr-print-card,
+          #guestvue-qr-print-card * { visibility: visible !important; }
+          #guestvue-qr-print-card {
+            position: fixed !important;
+            top: 50% !important; left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 320px !important;
+            border-radius: 24px !important;
+            box-shadow: none !important;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          @page { size: A6; margin: 8mm; }
+        }
+      `}</style>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
@@ -201,11 +230,14 @@ export default function QRCustomizer({ event }: Props) {
 
           <div
             ref={cardRef}
+            id="guestvue-qr-print-card"
             className="w-72 rounded-3xl overflow-hidden shadow-2xl"
             style={{
               background: ct.bg,
               border: ct.border !== 'transparent' ? `2px solid ${ct.border}` : undefined,
-            }}
+              WebkitPrintColorAdjust: 'exact',
+              printColorAdjust: 'exact',
+            } as React.CSSProperties}
           >
             <div className="px-7 pt-7 pb-4 text-center">
               <h2 className="font-bold text-xl leading-tight" style={{ color: ct.text }}>
