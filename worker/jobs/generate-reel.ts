@@ -30,26 +30,56 @@ const supabase = createClient<Database>(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-// ── R2 upload helper ──────────────────────────────────────────────────────────
-async function uploadToR2(key: string, body: Buffer, contentType: string): Promise<string> {
-  const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3')
-  const client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
-    requestChecksumCalculation: 'WHEN_REQUIRED' as any,
-    responseChecksumValidation: 'WHEN_REQUIRED' as any,
-  })
-  await client.send(new PutObjectCommand({
-    Bucket: process.env.R2_BUCKET_NAME!,
-    Key: key,
-    Body: body,
-    ContentType: contentType,
-  }))
-  return `${process.env.R2_PUBLIC_URL}/${key}`
+// ── Upload helper: R2 (preferred) with Supabase Storage fallback ──────────────
+async function uploadReelOutput(key: string, body: Buffer, contentType: string): Promise<string> {
+  // Try R2 if credentials are available
+  const hasR2 = !!(
+    process.env.R2_ACCOUNT_ID &&
+    process.env.R2_ACCESS_KEY_ID &&
+    process.env.R2_SECRET_ACCESS_KEY &&
+    process.env.R2_BUCKET_NAME
+  )
+
+  if (hasR2) {
+    try {
+      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3')
+      const client = new S3Client({
+        region: 'auto',
+        endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        credentials: {
+          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+        },
+        requestChecksumCalculation: 'WHEN_REQUIRED' as any,
+        responseChecksumValidation: 'WHEN_REQUIRED' as any,
+      })
+      await client.send(new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME!,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }))
+      const pubUrl = process.env.R2_PUBLIC_URL || `https://pub-81436af2ca3a49feb0bc7261118c4f17.r2.dev`
+      console.log('[reel] Uploaded to R2')
+      return `${pubUrl}/${key}`
+    } catch (err: any) {
+      console.warn('[reel] R2 upload failed, falling back to Supabase Storage:', err.message)
+    }
+  }
+
+  // Fallback: Supabase Storage (same bucket used by guest uploads)
+  console.log('[reel] Uploading to Supabase Storage')
+  const { data, error } = await supabase.storage
+    .from('event-uploads')
+    .upload(key, body, { contentType, upsert: true })
+
+  if (error) throw new Error(`Supabase Storage upload failed: ${error.message}`)
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('event-uploads')
+    .getPublicUrl(key)
+
+  return publicUrl
 }
 
 // ── Media item ────────────────────────────────────────────────────────────────
@@ -175,21 +205,33 @@ export async function generateReel(args: GenerateReelArgs) {
     const orderedUploads = uploadIds.map(id => uploadMap.get(id)).filter(Boolean) as any[]
 
     // ── Download all media to temp dir ─────────────────────────────────────
+    // Detect actual file type from URL extension + Content-Type response header.
+    // Do NOT trust the DB `type` field alone — uploads via iOS/Android often
+    // save h264 video as type='photo' (e.g. Live Photos, HEVC clips).
+    const VIDEO_EXTS = new Set(['mp4','mov','avi','mkv','webm','m4v','3gp','mts','hevc','ts','heic'])
     const mediaFiles: MediaFile[] = []
     for (let i = 0; i < Math.min(orderedUploads.length, 30); i++) {
       const u = orderedUploads[i]
       const url = u.original_url || u.display_url
       if (!url) continue
 
-      const isVideo = u.type === 'video'
-      const ext = isVideo ? 'mp4' : 'jpg'
-      const localPath = path.join(tmpDir, `media_${i}.${ext}`)
+      // Check URL extension first
+      const urlPath = url.split('?')[0]
+      const urlExt  = (urlPath.split('.').pop() ?? '').toLowerCase()
 
       const res = await fetch(url)
       if (!res.ok) {
         console.warn(`[reel] Skipping ${u.id}: HTTP ${res.status}`)
         continue
       }
+
+      // Check Content-Type header as secondary signal
+      const contentType = res.headers.get('content-type') ?? ''
+      const isVideo = u.type === 'video' || VIDEO_EXTS.has(urlExt) || contentType.startsWith('video/')
+      const ext = isVideo ? 'mp4' : 'jpg'
+      const localPath = path.join(tmpDir, `media_${i}.${ext}`)
+
+      console.log(`[reel] media_${i}: dbType=${u.type} urlExt=${urlExt} contentType=${contentType} → treating as ${isVideo ? 'video' : 'photo'}`)
 
       await writeFile(localPath, Buffer.from(await res.arrayBuffer()))
       mediaFiles.push({
@@ -234,10 +276,10 @@ export async function generateReel(args: GenerateReelArgs) {
       tmpDir,
     })
 
-    // ── Upload to R2 ───────────────────────────────────────────────────────
+    // ── Upload reel (R2 → Supabase Storage fallback) ──────────────────────
     const reelBuf = await readFile(outputPath)
     const reelKey = `events/${eventId}/reels/${reelId}.mp4`
-    const outputUrl = await uploadToR2(reelKey, reelBuf, 'video/mp4')
+    const outputUrl = await uploadReelOutput(reelKey, reelBuf, 'video/mp4')
 
     console.log(`[generate-reel] Done: ${outputUrl}`)
 
@@ -353,18 +395,15 @@ async function buildFFmpegReel({
   const fp: string[] = []
 
   // 1. Scale + pad all media to 1080×1920
+  // Photos: simple scale+pad+fps (zoompan is too slow and causes timeouts).
+  // Videos: scale+pad+trim to clip duration.
   for (let i = 0; i < mediaFiles.length; i++) {
     const mf = mediaFiles[i]
     if (mf.type === 'photo') {
-      // Subtle Ken Burns zoom
-      const zoomExpr = i % 2 === 0
-        ? `z='min(zoom+0.0008,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`
-        : `z='if(lte(zoom,1),1.08,max(1,zoom-0.0008))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`
       fp.push(
         `[${i}:v]scale=1080:1920:force_original_aspect_ratio=decrease,`
         + `pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1,`
-        + `zoompan=${zoomExpr}:d=${Math.round(CLIP_DUR * 30)}:s=1080x1920:fps=30,`
-        + `setpts=PTS-STARTPTS[v${i}]`
+        + `fps=30,setpts=PTS-STARTPTS[v${i}]`
       )
     } else {
       fp.push(
@@ -437,6 +476,8 @@ async function buildFFmpegReel({
   }
 
   let videoLabel = 'vbase'
+  // Track the label before drawtext so the no-text fallback can alias it correctly
+  const preDrawtextLabel = videoLabel
 
   if (dts.length > 0) {
     const dtLabel = logoInputIdx >= 0 ? 'vtext' : 'vfinal'
@@ -530,18 +571,19 @@ async function buildFFmpegReel({
 
   // Fallback: strip ALL drawtext filters if fonts aren't available
   if (result !== true) {
-    const firstErr = String(result)
     console.warn('[reel] Retrying without text overlays (font issue detected)')
 
-    // Rebuild filter_complex without any drawtext
+    // Rebuild filter_complex without any drawtext filters
     const fpNoText = fp.filter(f => !f.includes('drawtext'))
 
-    // If videoLabel wasn't 'vfinal' in the no-text graph, alias it
+    // After stripping drawtext, [vfinal] may no longer be produced.
+    // We need to alias preDrawtextLabel → vfinal if it isn't already defined.
     const hasVfinal = fpNoText.some(f => f.includes('[vfinal]'))
     if (!hasVfinal) {
-      // Find last label produced
-      const lastLabel = audioLabel ? videoLabel : videoLabel
-      if (lastLabel !== 'vfinal') fpNoText.push(`[${lastLabel}]copy[vfinal]`)
+      // preDrawtextLabel is the last label before drawtext was applied (e.g. 'vbase')
+      if (preDrawtextLabel !== 'vfinal') {
+        fpNoText.push(`[${preDrawtextLabel}]copy[vfinal]`)
+      }
     }
 
     const cmdNoText = [
