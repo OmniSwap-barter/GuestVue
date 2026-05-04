@@ -30,46 +30,14 @@ const supabase = createClient<Database>(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-// ── Upload helper: R2 (preferred) with Supabase Storage fallback ──────────────
+// ── Upload reel to Supabase Storage ──────────────────────────────────────────
+// Supabase Storage is used for all reel outputs because:
+//   1. CORS headers are correctly set — videos play inline in the browser
+//   2. Same auth as the rest of the app — no extra credentials needed
+//   3. R2 public buckets block <video> streaming due to missing CORS headers
 async function uploadReelOutput(key: string, body: Buffer, contentType: string): Promise<string> {
-  // Try R2 if credentials are available
-  const hasR2 = !!(
-    process.env.R2_ACCOUNT_ID &&
-    process.env.R2_ACCESS_KEY_ID &&
-    process.env.R2_SECRET_ACCESS_KEY &&
-    process.env.R2_BUCKET_NAME
-  )
-
-  if (hasR2) {
-    try {
-      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3')
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-        credentials: {
-          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-        },
-        requestChecksumCalculation: 'WHEN_REQUIRED' as any,
-        responseChecksumValidation: 'WHEN_REQUIRED' as any,
-      })
-      await client.send(new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: key,
-        Body: body,
-        ContentType: contentType,
-      }))
-      const pubUrl = process.env.R2_PUBLIC_URL || `https://pub-81436af2ca3a49feb0bc7261118c4f17.r2.dev`
-      console.log('[reel] Uploaded to R2')
-      return `${pubUrl}/${key}`
-    } catch (err: any) {
-      console.warn('[reel] R2 upload failed, falling back to Supabase Storage:', err.message)
-    }
-  }
-
-  // Fallback: Supabase Storage (same bucket used by guest uploads)
   console.log('[reel] Uploading to Supabase Storage')
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from('event-uploads')
     .upload(key, body, { contentType, upsert: true })
 
@@ -79,6 +47,7 @@ async function uploadReelOutput(key: string, body: Buffer, contentType: string):
     .from('event-uploads')
     .getPublicUrl(key)
 
+  console.log('[reel] Uploaded to Supabase Storage:', publicUrl)
   return publicUrl
 }
 
