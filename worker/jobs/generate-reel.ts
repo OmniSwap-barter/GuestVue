@@ -273,6 +273,7 @@ export async function generateReel(args: GenerateReelArgs) {
       textOverlays,
       xfadeTransitions: xfadeTrans,
       eventHashtag: (event as any).hashtag ?? null,
+      theme,
       tmpDir,
     })
 
@@ -331,10 +332,22 @@ interface BuildArgs {
   textOverlays: { title?: string; caption?: string; outro?: string } | null
   xfadeTransitions: string[]
   eventHashtag: string | null
+  theme: string | null
   tmpDir: string
 }
 
 const VALID_XFADE = new Set(['fade','wipeleft','wiperight','slideleft','slideright','circlecrop','radial','dissolve'])
+
+// ── Theme-aware color grade (applied per clip after scale/crop) ───────────────
+// Keeps it subtle — the goal is mood, not Instagram filter overkill.
+const THEME_COLOR_GRADE: Record<string, string> = {
+  viral_wedding:     'colorchannelmixer=rr=1.10:gg=0.98:bb=0.88',  // warm gold
+  love_story:        'colorchannelmixer=rr=1.08:gg=0.97:bb=0.90',  // warm rose
+  birthday_bangerz:  'colorchannelmixer=rr=1.04:gg=1.00:bb=1.06',  // cool pop
+  cinema_mode:       'colorchannelmixer=rr=0.95:gg=0.98:bb=1.05',  // cool cinematic
+  corporate_flex:    'colorchannelmixer=rr=0.97:gg=0.99:bb=1.03',  // slight cool
+  glow_up_reel:      'colorchannelmixer=rr=1.05:gg=1.01:bb=0.95',  // warm glow
+}
 
 async function buildFFmpegReel({
   mediaFiles,
@@ -346,12 +359,18 @@ async function buildFFmpegReel({
   textOverlays,
   xfadeTransitions,
   eventHashtag,
+  theme,
   tmpDir,
 }: BuildArgs) {
 
-  const CLIP_DUR  = 3.0
-  const XFADE_DUR = 0.5
+  // Wedding/romance themes use longer, more cinematic clip timing
+  const isCinematic = theme === 'viral_wedding' || theme === 'love_story' || theme === 'cinema_mode'
+  const CLIP_DUR  = isCinematic ? 4.0 : 3.0
+  const XFADE_DUR = isCinematic ? 0.8 : 0.5
   const EFFECTIVE = CLIP_DUR - XFADE_DUR
+
+  // Color grade filter for this theme (empty string = no grade)
+  const colorGrade = theme ? (THEME_COLOR_GRADE[theme] ?? '') : ''
   const totalDuration = EFFECTIVE * mediaFiles.length + XFADE_DUR
 
   // ── Download logo ──────────────────────────────────────────────────────
@@ -394,22 +413,25 @@ async function buildFFmpegReel({
   // ── filter_complex ──────────────────────────────────────────────────────
   const fp: string[] = []
 
-  // 1. Scale + pad all media to 1080×1920
-  // Photos: simple scale+pad+fps (zoompan is too slow and causes timeouts).
-  // Videos: scale+pad+trim to clip duration.
+  // 1. Smart cover-crop all media to 1080×1920 (no black bars).
+  //    force_original_aspect_ratio=increase scales to COVER, then crop=1080:1920
+  //    trims from center — equivalent to CSS object-fit:cover.
+  //    This fills the frame for all aspect ratios: landscape, portrait, square.
+  //    Color grade applied per clip if theme has one.
   for (let i = 0; i < mediaFiles.length; i++) {
     const mf = mediaFiles[i]
+    const grade = colorGrade ? `,${colorGrade}` : ''
     if (mf.type === 'photo') {
       fp.push(
-        `[${i}:v]scale=1080:1920:force_original_aspect_ratio=decrease,`
-        + `pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1,`
-        + `fps=30,setpts=PTS-STARTPTS[v${i}]`
+        `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,`
+        + `crop=1080:1920,setsar=1,`
+        + `fps=30,setpts=PTS-STARTPTS${grade}[v${i}]`
       )
     } else {
       fp.push(
-        `[${i}:v]scale=1080:1920:force_original_aspect_ratio=decrease,`
-        + `pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,setsar=1,`
-        + `trim=0:${CLIP_DUR},setpts=PTS-STARTPTS[v${i}]`
+        `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,`
+        + `crop=1080:1920,setsar=1,`
+        + `trim=0:${CLIP_DUR},setpts=PTS-STARTPTS${grade}[v${i}]`
       )
     }
   }

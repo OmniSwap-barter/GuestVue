@@ -498,6 +498,48 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
     return data.url ?? null
   }
 
+  // ── Magic Button: 1-tap Cinematic Wedding Reel ─────────────────────────────
+  // Bypasses state entirely — builds the payload directly so it fires immediately.
+  async function handleMagicGenerate(occasion: 'wedding' | 'party' | 'corporate') {
+    const MAGIC_PRESETS = {
+      wedding:   { theme: 'viral_wedding',     music: 'pop_romantic',     transition: 'fade',     label: event.name + ' 💍' },
+      party:     { theme: 'birthday_bangerz',  music: 'afrobeats_upbeat', transition: 'slideleft', label: event.name + ' 🎉' },
+      corporate: { theme: 'corporate_flex',    music: 'cinematic',        transition: 'wipeleft',  label: event.name },
+    }
+    const preset = MAGIC_PRESETS[occasion]
+    const validIds = allMedia.filter(m => m.original_url || m.display_url).map(m => m.id).slice(0, 30)
+    if (validIds.length < 3) { alert('You need at least 3 photos or videos to generate a reel.'); return }
+    setBuilderStatus('submitting')
+    setErrorMsg('')
+    try {
+      const res = await fetch(`/api/events/${event.id}/generate-reel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uploadIds: validIds,
+          musicTrack: preset.music,
+          removeWatermark: false,
+          logoUrl: null,
+          theme: preset.theme,
+          transition: preset.transition,
+          textOverlays: { title: preset.label },
+          logoPosition: 'outro',
+        }),
+      })
+      const data = await res.json()
+      if (res.status === 403 && data.error === 'monthly_limit_reached') {
+        setBuilderStatus('idle'); setUpgradeLimit(data.limit ?? 1); setShowUpgradeModal(true); return
+      }
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      await loadReels()
+      setBuilderStatus('idle')
+      setShowBuilder(false)
+    } catch (err: any) {
+      setBuilderStatus('error')
+      setErrorMsg(err?.message || 'Generation failed. Please try again.')
+    }
+  }
+
   async function handleGenerate() {
     const validIds = orderedIds.filter(id => {
       const m = allMedia.find(x => x.id === id)
@@ -700,6 +742,43 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
               ← Back
             </button>
           )}
+        </div>
+
+        {/* ── Magic Button ─────────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+          <div className="px-5 pt-5 pb-4">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">✨ One-tap instant reel</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { key: 'wedding'   as const, emoji: '💍', label: 'Wedding', sub: 'Cinematic · Warm', color: '#D4A843', bg: 'linear-gradient(135deg,#1a0a00,#3d1800,#5c2800)' },
+                { key: 'party'     as const, emoji: '🎉', label: 'Party',   sub: 'High-energy · Cuts', color: '#ff6b6b', bg: 'linear-gradient(135deg,#1a0010,#4c0033,#7c0050)' },
+                { key: 'corporate' as const, emoji: '🏢', label: 'Corporate',sub: 'Sleek · Minimal',  color: '#38bdf8', bg: 'linear-gradient(135deg,#030712,#0f172a,#1e3a5f)' },
+              ]).map(btn => (
+                <button
+                  key={btn.key}
+                  onClick={() => handleMagicGenerate(btn.key)}
+                  disabled={builderStatus === 'submitting' || builderStatus === 'uploading_logo'}
+                  className="relative rounded-xl p-3 text-left transition-all hover:scale-[1.03] disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+                  style={{ background: btn.bg, border: `1.5px solid ${btn.color}30` }}
+                >
+                  <span className="text-2xl mb-1 block">{btn.emoji}</span>
+                  <p className="text-xs font-bold leading-tight" style={{ color: btn.color }}>{btn.label}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: btn.color, opacity: 0.7 }}>{btn.sub}</p>
+                  {builderStatus === 'submitting' && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-xl">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-400 text-center mt-2">
+              Uses all {allMedia.length} uploaded media · auto-selects music, transitions &amp; timing
+            </p>
+          </div>
+          <div className="border-t border-slate-100 px-5 py-2">
+            <p className="text-xs text-slate-400 text-center font-semibold">— or build it yourself below —</p>
+          </div>
         </div>
 
         {/* Editor tabs */}
