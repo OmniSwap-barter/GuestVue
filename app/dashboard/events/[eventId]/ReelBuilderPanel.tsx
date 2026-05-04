@@ -287,21 +287,21 @@ function DraftWorkspace({
               src={videoUrl}
               controls
               playsInline
-              crossOrigin="anonymous"
               className="w-full h-full object-cover"
               onError={() => setVideoError(true)}
             />
           </div>
         ) : videoUrl && videoError ? (
-          /* CORS blocks inline playback from R2 — show open-in-tab fallback */
+          /* Video failed to load — show open-in-tab fallback */
           <div className="mx-auto rounded-xl bg-slate-900 flex flex-col items-center justify-center gap-3 mb-4 p-6"
-            style={{ maxWidth: 240, aspectRatio: '9/16' }}>
+            style={{ maxWidth: 240, minHeight: 180 }}>
             <span className="text-5xl">🎬</span>
             <p className="text-white/70 text-xs text-center leading-relaxed">
-              Your reel is ready! Tap below to watch it.
+              Your reel is ready!
             </p>
             <a href={videoUrl} target="_blank" rel="noopener noreferrer"
-              className="px-4 py-2 bg-[#14B8A6] text-white text-xs font-bold rounded-lg hover:bg-[#0E9488] transition-all">
+              style={{ zIndex: 10, position: 'relative' }}
+              className="px-4 py-2 bg-[#14B8A6] text-white text-xs font-bold rounded-lg hover:bg-[#0E9488] transition-all block text-center">
               ▶ Watch Reel →
             </a>
           </div>
@@ -327,12 +327,13 @@ function DraftWorkspace({
             {videoUrl && (
               <>
                 <a href={videoUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex-1 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-center">
+                  className="flex-1 py-2.5 text-sm font-bold text-white rounded-xl text-center transition-all"
+                  style={{ background: 'linear-gradient(135deg,#14B8A6,#0A4F6B)' }}>
                   ▶ Watch
                 </a>
                 <a href={videoUrl} download={`${eventName}-reel.mp4`}
                   className="flex-1 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-center">
-                  ⬇ Download
+                  ⬇ Save
                 </a>
               </>
             )}
@@ -370,16 +371,17 @@ function PublishedReelCard({
         {videoUrl && !videoError ? (
           <div className="relative mx-auto rounded-xl overflow-hidden bg-black mb-4"
             style={{ maxWidth: 240, aspectRatio: '9/16' }}>
-            <video src={videoUrl} controls playsInline crossOrigin="anonymous"
+            <video src={videoUrl} controls playsInline
               className="w-full h-full object-cover"
               onError={() => setVideoError(true)} />
           </div>
         ) : videoUrl && videoError ? (
           <div className="mx-auto rounded-xl bg-slate-900 flex flex-col items-center justify-center gap-3 mb-4 p-6"
-            style={{ maxWidth: 240, aspectRatio: '9/16' }}>
+            style={{ maxWidth: 240, minHeight: 180 }}>
             <span className="text-5xl">🎬</span>
             <a href={videoUrl} target="_blank" rel="noopener noreferrer"
-              className="px-4 py-2 bg-[#14B8A6] text-white text-xs font-bold rounded-lg hover:bg-[#0E9488] transition-all">
+              style={{ zIndex: 10, position: 'relative' }}
+              className="px-4 py-2 bg-[#14B8A6] text-white text-xs font-bold rounded-lg hover:bg-[#0E9488] transition-all block text-center">
               ▶ Watch Reel →
             </a>
           </div>
