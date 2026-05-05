@@ -136,3 +136,112 @@ This file (`CLAUDE.md`) is the bridge. Claude Code reads it at session start and
 1. Keep this file updated with any major decisions
 2. Cowork can update CLAUDE.md with new context; Claude Code will pick it up next session
 3. Both work on the same git repo — push from either, pull in the other
+
+---
+
+## Full Feature Roadmap
+
+Build in phase order — each phase depends on the one before it.
+
+### Phase 1 — Guest Experience Foundation (build first)
+Everything else depends on guests having a real destination after they upload.
+
+| Feature | What it is | Key files to create |
+|---------|-----------|-------------------|
+| **Guest gallery page** | `/e/[eventId]` becomes a photo wall — guests browse all approved uploads, see the published reel | `app/e/[eventId]/page.tsx`, `app/e/[eventId]/GalleryView.tsx` |
+| **Photo download** | Guests can download individual photos or a ZIP of all event photos | `app/api/events/[eventId]/download/route.ts` |
+| **Guest identity** | Guest enters their name on upload — stored with the upload record | Add `guest_name` column to `uploads` table |
+
+**DB migration needed:**
+```sql
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS guest_name text;
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS approved boolean DEFAULT true;
+```
+
+---
+
+### Phase 2 — Host Control (builds on Phase 1)
+Gives hosts power over what guests see.
+
+| Feature | What it is | Key files to create |
+|---------|-----------|-------------------|
+| **Photo moderation** | Host approves/rejects individual uploads before they appear in gallery/reel | `app/dashboard/events/[eventId]/moderation/page.tsx`, `app/api/events/[eventId]/uploads/[uploadId]/approve/route.ts` |
+| **"Reel ready" notification** | Email host when reel finishes rendering | Add email call in worker after status → complete. Use Resend or Supabase email. Add `RESEND_API_KEY` to Railway env |
+| **Event analytics** | Scans, uploads, gallery views, reel plays — simple counts on dashboard | `app/api/events/[eventId]/analytics/route.ts`, new `event_analytics` table |
+
+**DB migration needed:**
+```sql
+CREATE TABLE IF NOT EXISTS event_analytics (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id uuid REFERENCES events(id),
+  metric text NOT NULL,  -- 'scan', 'upload', 'gallery_view', 'reel_play'
+  created_at timestamptz DEFAULT now()
+);
+```
+
+---
+
+### Phase 3 — Viral Growth (builds on Phase 1 + 2)
+Features that make GuestVue spread at events.
+
+| Feature | What it is | Key files to create |
+|---------|-----------|-------------------|
+| **WhatsApp share** | One-tap button on dashboard and gallery — opens WhatsApp with pre-filled message + gallery link | UI only — `https://wa.me/?text=...` deep link |
+| **Custom event landing page** | Host sets welcome message, accent colour, their logo on the guest upload page | Add `landing_config jsonb` column to `events` table. Update `app/e/[eventId]/page.tsx` |
+| **"Find my photos"** | Guest types their name → filtered view of photos tagged with that name | Filter on `guest_name` column added in Phase 1 |
+| **Multiple reels** | Host can generate a short highlights reel AND a full-length version from same event | Already partially supported — just expose it properly in ReelBuilderPanel |
+
+**DB migration needed:**
+```sql
+ALTER TABLE events ADD COLUMN IF NOT EXISTS landing_config jsonb;
+-- landing_config shape: { welcome_msg, accent_color, logo_url, show_guest_count }
+```
+
+---
+
+### Phase 4 — Monetisation (builds on everything)
+The pricing logic exists in code — this phase makes it real.
+
+| Feature | What it is | Key files to create |
+|---------|-----------|-------------------|
+| **Paystack pricing page** | Proper `/pricing` page with plan cards, feature comparison, Paystack checkout | `app/pricing/page.tsx`, `app/api/billing/checkout/route.ts` |
+| **Per-event white-label** | One-time ₦10,000 add-on: removes GuestVue branding from guest upload page + reel watermark for that event | `app/api/events/[eventId]/addon/route.ts` (already exists for watermark — extend it) |
+| **Plan upgrade flow** | In-app upgrade modal → Paystack → webhook updates `profiles.plan_type` | `app/api/billing/webhook/route.ts` |
+
+---
+
+### Build order within each phase
+1. DB migration first (Supabase dashboard or `supabase migration`)
+2. API route
+3. UI component
+4. Wire up to existing pages
+
+### Never build out of order
+- Don't build analytics before the gallery page (nothing to track yet)
+- Don't build WhatsApp share before the gallery page (nothing to link to)
+- Don't build the pricing page before moderation (hosts won't pay for a product they can't control)
+
+---
+
+## Current Build Status
+
+| Phase | Feature | Status |
+|-------|---------|--------|
+| ✅ Core | Guest upload (QR → Supabase Storage) | Done |
+| ✅ Core | Reel generation (BullMQ → FFmpeg → Supabase) | Done |
+| ✅ Core | 10 themes, 7 music tracks, Magic Button | Done |
+| ✅ Core | QR card designer | Done |
+| ✅ Core | Invitation card builder (6 themes) | Done |
+| ✅ Core | Draft → Publish workflow | Done |
+| 🔲 Phase 1 | Guest gallery page | Not started |
+| 🔲 Phase 1 | Photo download | Not started |
+| 🔲 Phase 1 | Guest name on upload | Not started |
+| 🔲 Phase 2 | Photo moderation | Not started |
+| 🔲 Phase 2 | Reel ready notification | Not started |
+| 🔲 Phase 2 | Event analytics | Not started |
+| 🔲 Phase 3 | WhatsApp share | Not started |
+| 🔲 Phase 3 | Custom landing page | Not started |
+| 🔲 Phase 3 | Find my photos | Not started |
+| 🔲 Phase 4 | Paystack pricing page | Not started |
+| 🔲 Phase 4 | Per-event white-label | Not started |
+| 🔲 Phase 4 | Plan upgrade flow | Not started |
