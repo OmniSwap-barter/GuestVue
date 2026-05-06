@@ -392,3 +392,162 @@ CREATE TABLE IF NOT EXISTS affiliate_program (
 | 🔲 Phase 4 | Paystack pricing page | Not started |
 | 🔲 Phase 4 | Per-event white-label | Not started |
 | 🔲 Phase 4 | Plan upgrade flow | Not started |
+
+---
+
+## Brand Design System (implement everywhere, no exceptions)
+
+The live site at `guest-vue.vercel.app` does NOT match the intended design. Claude Code must apply this spec consistently across every page, component, and new feature.
+
+### Core Color Tokens
+
+```typescript
+// Use these exact values — do not invent alternatives
+const brand = {
+  deepNavy:  '#060D1A',  // Page backgrounds, sidebar, dark cards
+  oceanNavy: '#0A1628',  // Card surfaces, elevated containers
+  teal:      '#14B8A6',  // PRIMARY accent — CTAs, links, icons, active states
+  coral:     '#E8735C',  // Secondary accent — badges, gradient ends, highlights
+}
+```
+
+**Tailwind equivalents to use in className strings:**
+- Deep Navy background → `style={{ background: '#060D1A' }}` (no Tailwind class — use inline)
+- Teal text → `style={{ color: '#14B8A6' }}` or Tailwind `text-teal-400` (close enough)
+- Teal border → `border-teal-500`
+- Teal button → `bg-teal-500 hover:bg-teal-600`
+- Coral badge → `style={{ background: '#E8735C' }}`
+- White text on dark → `text-white` or `text-white/80` for secondary
+
+### Page & Layout Rules
+
+- **Every page background**: `#060D1A` (deep navy) — never white, never gray-900
+- **Dashboard sidebar**: `#0A1628` with teal left-border on active item
+- **Card surfaces**: `background: '#0A1628'`, border `1px solid rgba(255,255,255,0.08)`
+- **No light mode** — GuestVue is dark-only. Never add `bg-white` or `bg-gray-50` to full-page layouts.
+
+### Typography Rules
+
+```css
+/* Headings — bold display font */
+font-family: var(--font-display), sans-serif;
+font-weight: 900; /* font-black */
+
+/* Body — clean sans */
+font-family: var(--font-sans), sans-serif;
+font-weight: 400–600;
+```
+
+- Page titles: `text-white font-black text-3xl` (or larger)
+- Section headings: `text-white font-bold text-xl`
+- Labels / captions: `text-white/60 text-sm`
+- Links / interactive text: `color: #14B8A6` (teal)
+
+### Logo Rules
+
+The GuestVue logo has two parts:
+1. **Icon** — Camera lens ring (circle with inner circle + 4 corner dots), rendered in `#14B8A6` teal on `#060D1A` background
+2. **Wordmark** — "Guest" in white + "Vue" in `#14B8A6` teal, font-black, no space between words
+
+When implementing in code:
+```tsx
+<span className="font-black text-white">Guest</span>
+<span className="font-black" style={{ color: '#14B8A6' }}>Vue</span>
+```
+
+Do NOT use a single color for the wordmark. Do NOT render it in all-white or all-teal.
+
+### Button Styles
+
+**Primary CTA (most important action on screen):**
+```tsx
+// Coral-to-teal gradient — use for "Create Event", "Generate Reel", "Get Started"
+className="px-6 py-3 rounded-xl font-bold text-white"
+style={{ background: 'linear-gradient(135deg, #E8735C, #14B8A6)' }}
+```
+
+**Secondary action:**
+```tsx
+// Teal solid — use for "Publish", "Download", "Watch Reel"
+className="px-5 py-2.5 rounded-xl font-bold text-white bg-teal-500 hover:bg-teal-600 transition-colors"
+```
+
+**Ghost / outline:**
+```tsx
+// For destructive or low-priority actions
+className="px-5 py-2.5 rounded-xl font-semibold text-white/70 border border-white/20 hover:border-white/40 transition-colors"
+```
+
+**Never use:**
+- `bg-blue-*` — off-brand
+- `bg-purple-*` — off-brand
+- `bg-gray-*` on buttons — invisible on dark bg
+- `bg-green-*` — use teal instead
+
+### Badge / Pill Styles
+
+```tsx
+// Status badge — active/live
+<span className="px-2 py-0.5 rounded-full text-xs font-bold text-white"
+  style={{ background: '#14B8A6' }}>Live</span>
+
+// Count badge
+<span className="px-2 py-0.5 rounded-full text-xs font-bold text-white"
+  style={{ background: '#E8735C' }}>24 uploads</span>
+
+// Neutral badge
+<span className="px-2 py-0.5 rounded-full text-xs font-semibold text-white/60 bg-white/10">Draft</span>
+```
+
+### Event Card Component Pattern
+
+```tsx
+// Standard event card on dashboard — replicate this pattern
+<div className="rounded-2xl overflow-hidden border"
+  style={{ background: '#0A1628', borderColor: 'rgba(255,255,255,0.08)' }}>
+
+  {/* Top accent bar — always teal */}
+  <div className="h-1 w-full" style={{ background: '#14B8A6' }} />
+
+  {/* Card body */}
+  <div className="p-5">
+    <h3 className="text-white font-bold text-lg">Event Name</h3>
+    <p className="text-white/50 text-sm mt-1">Date · Location</p>
+
+    {/* Stats row */}
+    <div className="flex gap-4 mt-4">
+      <div className="text-center">
+        <p className="text-white font-black text-2xl">42</p>
+        <p className="text-white/50 text-xs">Uploads</p>
+      </div>
+      {/* ...more stats */}
+    </div>
+
+    {/* Action buttons */}
+    <div className="flex gap-2 mt-5">
+      <button className="flex-1 py-2 rounded-xl text-sm font-bold text-white bg-teal-500 hover:bg-teal-600 transition-colors">
+        Manage
+      </button>
+    </div>
+  </div>
+</div>
+```
+
+### Guest Upload Page (`/e/[eventId]`) Rules
+
+- Background: `#060D1A`
+- Upload zone: dashed border in teal (`border-2 border-dashed border-teal-500/50`), teal camera icon
+- CTA button: coral-to-teal gradient
+- "Powered by GuestVue" footer link: small, `text-white/30`, never intrusive
+
+### Anti-Patterns — Never Do These
+
+| ❌ Wrong | ✅ Right |
+|---------|---------|
+| `bg-white` on full page | `style={{ background: '#060D1A' }}` |
+| `text-gray-900` on dark bg | `text-white` or `text-white/80` |
+| Blue/purple CTAs | Teal (`#14B8A6`) or coral-to-teal gradient |
+| All-white logo wordmark | "Guest" white + "Vue" teal |
+| Light card backgrounds | `#0A1628` with subtle white border |
+| `bg-gray-800` cards | `style={{ background: '#0A1628' }}` |
+| Random accent colors | Only teal and coral — nothing else |
