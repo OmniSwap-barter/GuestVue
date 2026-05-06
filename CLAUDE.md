@@ -223,6 +223,139 @@ The pricing logic exists in code — this phase makes it real.
 
 ---
 
+## CRITICAL BUG: Broken Subscription / Payment Loop
+
+### What's broken
+Paying for Business, Vendor, or any recurring subscription plan does three wrong things:
+1. Treats the payment as a single free-tier event instead of upgrading the user's account
+2. Logs the user out and redirects to `/pricing` → `/signup` instead of back to dashboard
+3. Asks them to pay again because their plan was never updated in the database
+
+### Root cause
+The Paystack webhook handler does not differentiate between a one-off event payment and a subscription payment. It processes everything as an event creation. `profiles.plan_type` is never updated when a subscription is purchased.
+
+### The fix (implement in this order)
+
+**Step 1 — Run the DB migration** (safe SQL, ALTER TABLE only — see roadmap section below)
+
+**Step 2 — Fix Paystack checkout initialization**
+When launching a subscription checkout, pass metadata so the webhook knows what type of payment it is:
+```typescript
+// app/api/billing/initialize/route.ts
+body: JSON.stringify({
+  email: user.email,
+  plan: planCode,  // Paystack plan code
+  metadata: {
+    user_id: user.id,
+    purchase_type: 'subscription',  // 'subscription' | 'one_off_event'
+    target_tier: tierName,          // e.g. 'business', 'flex', 'pro'
+  }
+})
+```
+
+**Step 3 — Fix the webhook handler**
+File: `app/api/webhooks/paystack/route.ts`
+```typescript
+// Read purchase_type from metadata to route correctly
+const purchaseType = data.metadata?.purchase_type
+const targetTier   = data.metadata?.target_tier
+const userId       = data.metadata?.user_id
+
+if (purchaseType === 'subscription') {
+  // Update profiles table (existing) with new plan
+  await supabaseAdmin
+    .from('profiles')
+    .update({ plan_type: targetTier })
+    .eq('id', userId)
+
+  // Also upsert into user_entitlements (new table)
+  await supabaseAdmin
+    .from('user_entitlements')
+    .upsert({
+      user_id: userId,
+      current_plan_id: targetTier,
+      subscription_status: 'active',
+      is_unlimited_events: ['business', 'corporate'].includes(targetTier),
+      payment_customer_id: data.customer?.customer_code,
+    })
+  
+  // Redirect back to dashboard, NOT pricing or signup
+  return redirect('/dashboard')
+}
+
+if (purchaseType === 'one_off_event') {
+  // existing event creation logic stays here
+}
+```
+
+**Step 4 — Session preservation**
+Authenticated users must NEVER be routed to `/pricing` or `/signup` during or after a payment. After Paystack callback, check session first — if session exists, redirect to `/dashboard`, not to auth pages.
+
+**Step 5 — Add middleware entitlement gate**
+File: `middleware.ts`
+Check `user_entitlements` before allowing access to `/create-event`. If user has `subscription_status: 'active'` or `event_credits > 0`, bypass pricing entirely.
+
+### What NOT to do
+- Do NOT create a new `users` table — Supabase Auth owns users via `auth.users`
+- Do NOT reference `media_uploads` or `ai_reels` tables — they don't exist, use `uploads` and `reels`
+- Do NOT add Remotion — FFmpeg pipeline works, Remotion would be a months-long rewrite
+- Do NOT use R2 for new storage — Supabase Storage only
+
+---
+
+## Safe DB Migration (run in Supabase SQL Editor)
+
+```sql
+-- Add plan-aware columns to existing events table
+ALTER TABLE events ADD COLUMN IF NOT EXISTS event_status TEXT DEFAULT 'upcoming';
+ALTER TABLE events ADD COLUMN IF NOT EXISTS is_permanent_qr BOOLEAN DEFAULT FALSE;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS active_page_expiry TIMESTAMPTZ;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS storage_expiry TIMESTAMPTZ;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS upload_limit_total INTEGER DEFAULT 50;
+
+-- Add guest identity columns to existing uploads table
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS guest_name TEXT;
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS guest_session_id TEXT;
+ALTER TABLE uploads ADD COLUMN IF NOT EXISTS approved BOOLEAN DEFAULT TRUE;
+
+-- Add error visibility to existing reels table
+ALTER TABLE reels ADD COLUMN IF NOT EXISTS error_msg TEXT;
+
+-- NEW: User entitlements (fixes subscription bug)
+CREATE TABLE IF NOT EXISTS user_entitlements (
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  current_plan_id TEXT DEFAULT 'free',
+  event_credits INTEGER DEFAULT 1,
+  is_unlimited_events BOOLEAN DEFAULT FALSE,
+  subscription_status TEXT DEFAULT 'inactive',
+  payment_customer_id TEXT,
+  plan_expiry_date TIMESTAMPTZ,
+  ai_reel_generations_remaining INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- NEW: Analytics (Phase 2)
+CREATE TABLE IF NOT EXISTS event_analytics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  metric TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- NEW: Affiliate program (future)
+CREATE TABLE IF NOT EXISTS affiliate_program (
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  referral_code TEXT UNIQUE NOT NULL,
+  commission_rate_percentage NUMERIC DEFAULT 20.0,
+  paid_referrals_count INTEGER DEFAULT 0,
+  total_earnings_kobo BIGINT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+---
+
 ## Current Build Status
 
 | Phase | Feature | Status |
