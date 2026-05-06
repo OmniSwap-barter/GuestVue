@@ -57,6 +57,8 @@ Railway worker (worker/)
 
 6. **No zoompan** — Caused Railway timeout. Replaced with `scale+crop+fps=30`.
 
+7. **Remotion is planned but not yet implemented** — Remotion (React-based video renderer) is the target upgrade for the rendering engine in Phase 3+. When added, the architecture will be: Remotion renders the silent visual track (animated titles, motion graphics, CapCut-style transitions) → FFmpeg mixes in audio and does final MP4 encoding. They work together. Do NOT add Remotion until Phase 2 is fully complete and the core product is stable. When you do add it, keep FFmpeg — don't replace it.
+
 ---
 
 ## Important Files
@@ -215,6 +217,18 @@ The pricing logic exists in code — this phase makes it real.
 2. API route
 3. UI component
 4. Wire up to existing pages
+
+### Phase 5 — Remotion Rendering Upgrade (after Phase 2 is stable)
+This is the planned upgrade to the video rendering engine. Do not start this until Phases 1 and 2 are fully shipped and stable.
+
+| What | Details |
+|------|---------|
+| **Remotion renders visual track** | Animated title cards, beat-synced transitions, motion graphics, CapCut-style templates — all built as React components |
+| **FFmpeg handles audio + final encode** | Remotion outputs a silent MP4. FFmpeg mixes in background music, ducks audio on video clips, outputs final 1080×1920 MP4 |
+| **New worker structure** | `renderRemotionComposition(manifest)` → silent MP4 → `ffmpegMergeAudioVisual(silentMp4, musicUrl)` → final reel |
+| **Output still goes to Supabase Storage** | R2 is never used |
+| **New DB column** | Add `remotion_manifest JSONB` to `reels` table when this phase starts — stores the programmatic edit instructions |
+| **New env vars needed** | `REMOTION_SERVE_URL` on Railway worker |
 
 ### Never build out of order
 - Don't build analytics before the gallery page (nothing to track yet)
