@@ -204,7 +204,11 @@ export async function generateReel(args: GenerateReelArgs) {
     // Detect actual file type from URL extension + Content-Type response header.
     // Do NOT trust the DB `type` field alone — uploads via iOS/Android often
     // save h264 video as type='photo' (e.g. Live Photos, HEVC clips).
-    const VIDEO_EXTS = new Set(['mp4','mov','avi','mkv','webm','m4v','3gp','mts','hevc','ts','heic'])
+    // heic is an Apple still-image format — NOT a video. Treating it as video
+    // causes FFmpeg to receive a HEIC file with -stream_loop -1, producing zero
+    // decoded frames and killing the entire filter_complex ("Nothing was written").
+    // HEIC files are saved as .jpg and looped as photos instead.
+    const VIDEO_EXTS = new Set(['mp4','mov','avi','mkv','webm','m4v','3gp','mts','hevc','ts'])
     const mediaFiles: MediaFile[] = []
     for (let i = 0; i < Math.min(orderedUploads.length, 30); i++) {
       const u = orderedUploads[i]
@@ -480,7 +484,7 @@ async function buildFFmpegReel({
     for (let i = 1; i < mediaFiles.length; i++) {
       const raw = xfadeTransitions[(i - 1) % xfadeTransitions.length] ?? 'fade'
       const t   = VALID_XFADE.has(raw) ? raw : 'fade'
-      const offset = ((i - 1) * EFFECTIVE).toFixed(3)
+      const offset = (i * EFFECTIVE).toFixed(3)
       const outLabel = i === mediaFiles.length - 1 ? 'vbase' : `xf${i}`
       fp.push(`[${curLabel}][v${i}]xfade=transition=${t}:duration=${XFADE_DUR}:offset=${offset}[${outLabel}]`)
       curLabel = outLabel
@@ -642,6 +646,9 @@ async function buildFFmpegReel({
       return ffStderr || ffMsg || 'FFmpeg failed'
     }
   }
+
+  // Log the full command before running — appears in Railway logs for local repro
+  console.log('[FFMPEG CMD]', FFMPEG_BIN, cmd.join(' '))
 
   // First attempt: full command with text overlays
   let result = await runFFmpeg(cmd)
