@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import Link from 'next/link'
+import { useUpgradeModal } from '@/components/UpgradeModal'
 
 interface Upload {
   id: string
@@ -149,7 +149,7 @@ function DownloadReelButton({
 }
 
 // ─── Upgrade Modal ──────────────────────────────────────────────────────────
-function UpgradeModal({ planType, limit, onClose }: { planType: string; limit: number; onClose: () => void }) {
+function UpgradeModal({ planType, limit, onClose, onUpgrade }: { planType: string; limit: number; onClose: () => void; onUpgrade: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
@@ -182,10 +182,10 @@ function UpgradeModal({ planType, limit, onClose }: { planType: string; limit: n
             className="flex-1 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all">
             Maybe later
           </button>
-          <Link href="/pricing"
+          <button onClick={() => { onClose(); onUpgrade() }}
             className="flex-1 py-2.5 text-sm font-bold text-white bg-[#0A4F6B] rounded-xl hover:bg-[#1E5AAF] transition-all text-center">
             View plans →
-          </Link>
+          </button>
         </div>
       </div>
     </div>
@@ -193,7 +193,7 @@ function UpgradeModal({ planType, limit, onClose }: { planType: string; limit: n
 }
 
 // ─── Upgrade wall (plan doesn't support reels at all) ──────────────────────
-function UpgradeWall() {
+function UpgradeWall({ onUpgrade }: { onUpgrade: () => void }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
       <div className="relative p-8 text-center overflow-hidden"
@@ -222,10 +222,11 @@ function UpgradeWall() {
             </div>
           ))}
         </div>
-        <Link href="/pricing"
+        <button
+          onClick={onUpgrade}
           className="block w-full bg-[#0A4F6B] text-white font-bold py-3 rounded-xl text-center hover:bg-[#1E5AAF] transition-all">
           Upgrade to unlock AI Reels →
-        </Link>
+        </button>
       </div>
     </div>
   )
@@ -468,6 +469,7 @@ function PublishedReelCard({
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 export default function ReelBuilderPanel({ event, photos, videos = [], profile }: Props) {
+  const upgrade = useUpgradeModal()
   const allMedia = [...photos, ...videos]
   const planType = profile?.plan_type ?? 'free'
   const isUnlimited = profile?.is_unlimited ?? false
@@ -550,7 +552,7 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
     }
   }, [allMedia])
 
-  if (!planSupportsReel) return <UpgradeWall />
+  if (!planSupportsReel) return <UpgradeWall onUpgrade={upgrade.show} />
 
   // ── Helpers ──
   function applyTheme(themeId: string) {
@@ -833,11 +835,13 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
 
   return (
     <>
+      {upgrade.modal}
       {showUpgradeModal && (
         <UpgradeModal
           planType={planType}
           limit={upgradeLimit}
           onClose={() => setShowUpgradeModal(false)}
+          onUpgrade={() => { setShowUpgradeModal(false); upgrade.show() }}
         />
       )}
 

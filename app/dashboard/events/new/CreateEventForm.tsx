@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PLANS, BUSINESS_PLANS, PLANNER_PLANS, formatNaira } from '@/lib/pricing'
 import { createClient } from '@/lib/supabase/client'
+import { useUpgradeModal } from '@/components/UpgradeModal'
 
 interface Props {
   userId: string
@@ -34,6 +35,7 @@ const LOADING_MESSAGES = [
 
 export default function CreateEventForm({ userId, planType, isUnlimited = false }: Props) {
   const router = useRouter()
+  const upgrade = useUpgradeModal()
 
   // Paid subscription types get events without per-event payment
   const isPaidSubscriber =
@@ -323,6 +325,7 @@ export default function CreateEventForm({ userId, planType, isUnlimited = false 
   if (step === 'plan') {
     return (
       <div className="animate-fade-in">
+        {upgrade.modal}
         {/* Back */}
         <button type="button" onClick={prevStep}
           className="flex items-center gap-1.5 text-sm text-midnight-400 hover:text-midnight-700 mb-5 transition-colors">
@@ -489,10 +492,11 @@ export default function CreateEventForm({ userId, planType, isUnlimited = false 
           </button>
         ) : (
           <div className="space-y-3">
-            <a href="/pricing" target="_blank" rel="noopener noreferrer"
+            <button type="button"
+              onClick={upgrade.show}
               className="block w-full text-center bg-ocean hover:bg-ocean-600 text-white font-bold py-4 rounded-xl transition-all shadow-brand text-base">
               See full pricing & get started →
-            </a>
+            </button>
             <button type="button"
               onClick={() => { setPlanCategory('personal'); setPlan('free') }}
               className="w-full text-sm text-midnight-400 hover:text-midnight-600 transition-colors py-2">

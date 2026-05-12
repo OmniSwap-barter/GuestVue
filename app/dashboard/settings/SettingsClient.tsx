@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useUpgradeModal } from '@/components/UpgradeModal'
 
 interface Profile {
   id: string
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export default function SettingsClient({ profile, email }: Props) {
+  const upgrade = useUpgradeModal()
   const [fullName, setFullName] = useState(profile.full_name ?? '')
   const [phone, setPhone] = useState(profile.phone ?? '')
   const [saving, setSaving] = useState(false)
@@ -53,6 +55,7 @@ export default function SettingsClient({ profile, email }: Props) {
 
   return (
     <div className="space-y-6">
+      {upgrade.modal}
       {/* Profile */}
       <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
         <h2 className="font-display font-bold text-slate-900 mb-4">Profile</h2>
@@ -136,11 +139,12 @@ export default function SettingsClient({ profile, email }: Props) {
           </span>
         </div>
         <div className="mt-4">
-          <Link href="/pricing"
+          <button
+            onClick={upgrade.show}
             className="inline-block text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all"
             style={{ background: 'linear-gradient(135deg, #14B8A6, #1E5AAF)' }}>
             View plans & pricing →
-          </Link>
+          </button>
         </div>
       </div>
 
