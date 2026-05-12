@@ -219,6 +219,16 @@ export async function generateReel(args: GenerateReelArgs) {
       const urlPath = url.split('?')[0]
       const urlExt  = (urlPath.split('.').pop() ?? '').toLowerCase()
 
+      // HEIC/HEIF are Apple still-image containers. ffmpeg-static does NOT include
+      // libheif, so FFmpeg probes the file content (not the extension) and fails
+      // to decode HEIC bytes — even when the file is saved as .jpg. This causes
+      // error -22 (Invalid argument) in the filter_complex thread, which aborts
+      // the entire render ("Nothing was written into output file"). Skip early.
+      if (urlExt === 'heic' || urlExt === 'heif') {
+        console.warn(`[reel] Skipping ${u.id}: HEIC/HEIF extension — not decodable by ffmpeg-static`)
+        continue
+      }
+
       const res = await fetch(url)
       if (!res.ok) {
         console.warn(`[reel] Skipping ${u.id}: HTTP ${res.status}`)
@@ -227,6 +237,13 @@ export async function generateReel(args: GenerateReelArgs) {
 
       // Check Content-Type header as secondary signal
       const contentType = res.headers.get('content-type') ?? ''
+
+      // Also skip if the server reports HEIC/HEIF content-type regardless of URL extension
+      if (contentType.includes('heic') || contentType.includes('heif') || contentType.includes('image/heic') || contentType.includes('image/heif')) {
+        console.warn(`[reel] Skipping ${u.id}: HEIC/HEIF content-type (${contentType}) — not decodable by ffmpeg-static`)
+        continue
+      }
+
       const isVideo = u.type === 'video' || VIDEO_EXTS.has(urlExt) || contentType.startsWith('video/')
       const ext = isVideo ? 'mp4' : 'jpg'
       const localPath = path.join(tmpDir, `media_${i}.${ext}`)
@@ -484,7 +501,16 @@ async function buildFFmpegReel({
     for (let i = 1; i < mediaFiles.length; i++) {
       const raw = xfadeTransitions[(i - 1) % xfadeTransitions.length] ?? 'fade'
       const t   = VALID_XFADE.has(raw) ? raw : 'fade'
-      const offset = (i * EFFECTIVE).toFixed(3)
+      // Cumulative xfade offset: each clip contributes CLIP_DUR to the output timeline.
+      // The i-th transition (1-indexed) starts when (i) full clips have played.
+      // offset = i * CLIP_DUR - XFADE_DUR
+      //   i=1: 3.0 - 0.5 = 2.5s  (was i*EFFECTIVE=2.5 — same ✓)
+      //   i=2: 6.0 - 0.5 = 5.5s  (was i*EFFECTIVE=5.0 — 0.5s too early ✗)
+      //   i=3: 9.0 - 0.5 = 8.5s  (was i*EFFECTIVE=7.5 — 1.0s too early ✗)
+      // The old formula drifted by (i-1)*XFADE_DUR per transition, triggering xfade
+      // before the prior clip finished — producing invalid/overlapping frame ranges
+      // that caused error -22 (Invalid argument) in the filter_complex thread.
+      const offset = (i * CLIP_DUR - XFADE_DUR).toFixed(3)
       const outLabel = i === mediaFiles.length - 1 ? 'vbase' : `xf${i}`
       fp.push(`[${curLabel}][v${i}]xfade=transition=${t}:duration=${XFADE_DUR}:offset=${offset}[${outLabel}]`)
       curLabel = outLabel
