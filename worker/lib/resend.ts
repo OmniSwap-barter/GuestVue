@@ -1,7 +1,11 @@
-// ─── Transactional emails via Resend ─────────────────────────────────────────
-// Install: npm install resend
-// Get key: resend.com → API Keys → Create
-// Add RESEND_API_KEY to both Vercel env vars and Railway env vars.
+// ─── Transactional email helpers — worker-local copy ─────────────────────────
+// The Railway worker builds in isolation (only the worker/ directory is copied
+// into the Docker image). This file mirrors the relevant functions from the
+// root lib/resend.ts so the worker doesn't need to cross outside its build
+// context. Keep the two in sync manually when the email template changes.
+//
+// Requires: RESEND_API_KEY in Railway environment variables.
+// npm package: resend (already in worker/package.json)
 
 import { Resend } from 'resend'
 
@@ -17,7 +21,14 @@ const COLOR = {
   textMuted: '#94a3b8',
 }
 
-// ── Helper: branded email shell ───────────────────────────────────────────────
+function escHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 function emailShell(headerTitle: string, headerEmoji: string, body: string) {
   return `
 <!DOCTYPE html>
@@ -66,63 +77,6 @@ function emailShell(headerTitle: string, headerEmoji: string, body: string) {
   </table>
 </body>
 </html>`
-}
-
-// ── Send QR code email to host after event creation ───────────────────────────
-export async function sendQREmail({
-  to,
-  hostName,
-  eventName,
-  qrUrl,
-  galleryUrl,
-}: {
-  to: string | null
-  hostName: string
-  eventName: string
-  qrUrl: string
-  galleryUrl: string
-}) {
-  if (!to) return  // Guard: auth.users.email can be null
-
-  const body = `
-    <p style="color:#e2e8f0;font-size:16px;margin:0 0 16px;">Hi ${escHtml(hostName)},</p>
-    <p style="color:#cbd5e1;font-size:15px;line-height:1.6;margin:0 0 20px;">
-      Your event <strong style="color:#ffffff;">${escHtml(eventName)}</strong> is live!
-      Print this QR code and place it at your venue — guests scan it to upload their photos and videos instantly.
-    </p>
-
-    <!-- QR image -->
-    <table width="100%" cellpadding="0" cellspacing="0">
-      <tr><td align="center" style="padding:20px 0;">
-        <div style="display:inline-block;background:#ffffff;padding:12px;border-radius:16px;">
-          <img src="${qrUrl}" alt="Event QR Code" width="180" height="180" style="display:block;border-radius:8px;" />
-        </div>
-      </td></tr>
-    </table>
-
-    <p style="color:#94a3b8;font-size:13px;margin:0 0 8px;">Or share this link directly:</p>
-    <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:12px 16px;font-family:monospace;font-size:13px;color:${COLOR.teal};word-break:break-all;margin-bottom:24px;">
-      ${galleryUrl}
-    </div>
-
-    <table width="100%" cellpadding="0" cellspacing="0">
-      <tr>
-        <td style="padding-right:8px;">
-          <a href="${galleryUrl}"
-            style="display:block;background:${COLOR.teal};color:#ffffff;text-align:center;padding:14px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;">
-            View Event Dashboard →
-          </a>
-        </td>
-      </tr>
-    </table>
-  `
-
-  await resend.emails.send({
-    from: FROM,
-    to,
-    subject: `Your GuestVue QR code is ready — ${eventName}`,
-    html: emailShell('Your QR code is ready!', '🎉', body),
-  })
 }
 
 // ── Notify host when AI reel is ready ─────────────────────────────────────────
@@ -184,9 +138,4 @@ export async function sendReelReadyEmail({
     subject: `Your AI Reel is ready — ${escHtml(eventName)} 🎬`,
     html: emailShell('Your AI Reel is ready!', '🎬', body),
   })
-}
-
-// ─── Internal helpers ────────────────────────────────────────────────────────
-function escHtml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }

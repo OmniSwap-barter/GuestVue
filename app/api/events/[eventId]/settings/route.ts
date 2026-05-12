@@ -31,20 +31,30 @@ export async function PATCH(
     const body = await req.json()
 
     // Whitelist of updatable fields
-    const allowed = ['custom_color', 'hashtag', 'name', 'event_date', 'custom_logo']
+    const allowed = ['custom_color', 'hashtag', 'name', 'event_date', 'custom_logo', 'landing_config']
     const updates: Record<string, unknown> = {}
     for (const key of allowed) {
       if (key in body) updates[key] = body[key]
+    }
+
+    // When landing_config is being saved, mirror accent_color → custom_color and
+    // logo_url → custom_logo so the rest of the app keeps reading those columns.
+    if (body.landing_config && typeof body.landing_config === 'object') {
+      const lc = body.landing_config as Record<string, unknown>
+      if ('accent_color' in lc && typeof lc.accent_color === 'string') {
+        updates.custom_color = lc.accent_color
+      }
+      if ('logo_url' in lc && (typeof lc.logo_url === 'string' || lc.logo_url === null)) {
+        updates.custom_logo = lc.logo_url
+      }
     }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const { error } = await admin
-      .from('events')
-      .update(updates as any)
-      .eq('id', eventId) as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (admin.from('events').update(updates as any).eq('id', eventId) as any)
 
     if (error) {
       console.error('[settings] DB update error:', error)

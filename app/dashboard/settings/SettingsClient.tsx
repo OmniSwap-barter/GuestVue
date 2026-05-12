@@ -8,7 +8,7 @@ interface Profile {
   id: string
   full_name: string | null
   phone: string | null
-  email: string
+  email: string | null
   plan_type: string
   referral_code: string | null
 }

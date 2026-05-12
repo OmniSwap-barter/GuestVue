@@ -72,6 +72,8 @@ export interface GenerateReelArgs {
   theme?: string | null
   transition?: string
   textOverlays?: { title?: string; caption?: string; outro?: string } | null
+  /** Uniform playback speed applied to all video clips. 1.0 = normal. */
+  clipSpeed?: 0.5 | 1.0 | 1.5 | 2.5
 }
 
 // ── Theme → xfade transition map ──────────────────────────────────────────────
@@ -128,6 +130,28 @@ const THEME_MUSIC: Record<string, string> = {
   cinema_mode:       'cinematic',
 }
 
+// ── Audio speed helpers ───────────────────────────────────────────────────────
+// atempo only accepts values in [0.5, 2.0]. For speeds outside that range
+// we chain multiple atempo filters (e.g. 2.5x = atempo=2.0,atempo=1.25).
+function buildAtempoChain(speed: number): string {
+  if (speed === 1.0) return 'aresample=44100'
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+  const filters: string[] = []
+  let remaining = speed
+  // Reduce speeds > 2.0 by chaining 2.0 stages
+  while (remaining > 2.0 + 1e-9) {
+    filters.push('atempo=2.0')
+    remaining /= 2.0
+  }
+  // Raise speeds < 0.5 by chaining 0.5 stages
+  while (remaining < 0.5 - 1e-9) {
+    filters.push('atempo=0.5')
+    remaining /= 0.5
+  }
+  filters.push(`atempo=${clamp(remaining, 0.5, 2.0).toFixed(4)}`)
+  return filters.join(',')
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 export async function generateReel(args: GenerateReelArgs) {
   const { reelId, eventId, type } = args
@@ -159,6 +183,9 @@ export async function generateReel(args: GenerateReelArgs) {
     // Resolve music: job arg → theme default → null
     let musicTrack: string | null   = args.musicTrack ?? reel.music_track ?? null
     if (!musicTrack && theme && THEME_MUSIC[theme]) musicTrack = THEME_MUSIC[theme]
+
+    // Uniform speed applied to all video clips (photos are always static)
+    const clipSpeed: number = args.clipSpeed ?? (formats.clip_speed as number | undefined) ?? 1.0
 
     if (uploadIds.length < 3) throw new Error('Minimum 3 media items required')
 
@@ -207,7 +234,8 @@ export async function generateReel(args: GenerateReelArgs) {
         localPath,
         type: isVideo ? 'video' : 'photo',
         duration: isVideo ? 3.5 : 3.0,
-        speed: 1.0,
+        // Speed only applies to video clips; photos are always static
+        speed: isVideo ? clipSpeed : 1.0,
       })
     }
 
@@ -256,26 +284,30 @@ export async function generateReel(args: GenerateReelArgs) {
     await supabase.from('reels').update({
       status: 'complete',
       output_url: outputUrl,
+      draft_url:  outputUrl,   // mirror so DraftWorkspace can play/download immediately
       completed_at: new Date().toISOString(),
-      formats: { ...formats, '9:16': outputUrl },
+      formats: { ...formats, '9:16': outputUrl, clip_speed: clipSpeed },
     }).eq('id', reelId)
 
     // ── Email host ─────────────────────────────────────────────────────────
     if (process.env.RESEND_API_KEY) {
       try {
         const { data: host } = await supabase
-          .from('profiles').select('email, full_name').eq('id', (event as any).host_id).single()
-        if (host) {
-          const { sendReelReadyEmail } = await import('../../lib/resend')
+          .from('profiles').select('email, full_name').eq('id', event.host_id).single()
+        if (host?.email) {
+          // Use the worker-local copy of resend helpers — the repo-root lib/resend.ts
+          // is NOT available inside the Railway Docker image (build context = worker/).
+          const { sendReelReadyEmail } = await import('../lib/resend')
           await sendReelReadyEmail({
-            to: (host as any).email,
-            hostName: (host as any).full_name || 'there',
-            eventName: (event as any).name,
+            to: host.email,
+            hostName: host.full_name || 'there',
+            eventName: event.name,
             reelUrl: outputUrl,
-            dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/events/${eventId}`,
+            dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://theguestvue.com'}/dashboard/events/${eventId}`,
           })
+          console.log(`[reel] Email sent to ${host.email}`)
         }
-      } catch (e) { console.warn('[reel] Email failed:', e) }
+      } catch (e) { console.warn('[reel] Email failed (non-fatal):', e) }
     }
 
   } catch (err: unknown) {
@@ -387,6 +419,12 @@ async function buildFFmpegReel({
   //    trims from center — equivalent to CSS object-fit:cover.
   //    This fills the frame for all aspect ratios: landscape, portrait, square.
   //    Color grade applied per clip if theme has one.
+  //
+  //    Variable speed for video clips:
+  //    We trim (speed × CLIP_DUR) seconds of source material so that after
+  //    setpts=PTS/speed the output is exactly CLIP_DUR seconds long.
+  //    e.g. 2x speed: trim 6s → setpts=PTS/2 → 3s output  (fast forward)
+  //         0.5x:     trim 1.5s → setpts=PTS/0.5 → 3s output (slow motion)
   for (let i = 0; i < mediaFiles.length; i++) {
     const mf = mediaFiles[i]
     const grade = colorGrade ? `,${colorGrade}` : ''
@@ -397,10 +435,12 @@ async function buildFFmpegReel({
         + `fps=30,setpts=PTS-STARTPTS${grade}[v${i}]`
       )
     } else {
+      const srcDur   = (CLIP_DUR * mf.speed).toFixed(3)  // source seconds to consume
+      const speedStr = mf.speed !== 1.0 ? `,setpts=PTS/${mf.speed}` : ''
       fp.push(
         `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,`
         + `crop=1080:1920,setsar=1,`
-        + `trim=0:${CLIP_DUR},setpts=PTS-STARTPTS${grade}[v${i}]`
+        + `trim=0:${srcDur},setpts=PTS-STARTPTS${grade}${speedStr}[v${i}]`
       )
     }
   }
@@ -499,17 +539,68 @@ async function buildFFmpegReel({
     videoLabel = 'vfinal'
   }
 
-  // 5. Music: trim to reel length + fade out last 2s
+  // 5. Audio chain — three cases:
+  //
+  //    A) Background music track selected:
+  //       Trim music to reel length, fade out last 2s, normalise volume.
+  //       Video clip audio is intentionally dropped so the music is clean.
+  //       This is the "highlight reel" UX — music is the primary soundtrack.
+  //
+  //    B) No music + video clips with audio:
+  //       Extract each video clip's audio stream, speed-adjust with atempo,
+  //       then concatenate in clip order. This fixes the "silent reel" bug
+  //       where reels containing videos came out completely silent.
+  //
+  //    C) No music + photo-only reel: -an (silent, correct behaviour).
+  //
   let audioLabel: string | null = null
+
+  const videoClipIndices = mediaFiles
+    .map((mf, i) => (mf.type === 'video' ? i : -1))
+    .filter(i => i >= 0)
+
   if (musicInputIdx >= 0) {
+    // ── Case A: background music ───────────────────────────────────────────
     const fadeStart = Math.max(0, totalDuration - 2).toFixed(2)
     fp.push(
       `[${musicInputIdx}:a]atrim=0:${totalDuration.toFixed(3)},`
       + `afade=t=out:st=${fadeStart}:d=2,`
+      + `volume=0.88,`                          // slight normalisation headroom
       + `aformat=sample_rates=44100:channel_layouts=stereo[aout]`
     )
     audioLabel = 'aout'
+
+  } else if (videoClipIndices.length > 0) {
+    // ── Case B: no music — use video clip audio, speed-adjusted ───────────
+    for (const i of videoClipIndices) {
+      const mf      = mediaFiles[i]
+      const srcDur  = (CLIP_DUR * mf.speed).toFixed(3)
+      const atempo  = buildAtempoChain(mf.speed)
+      // atrim matches the same window we cut for the video track
+      fp.push(
+        `[${i}:a]atrim=0:${srcDur},asetpts=PTS-STARTPTS,`
+        + `${atempo},`
+        + `aformat=sample_rates=44100:channel_layouts=stereo[va${i}]`
+      )
+    }
+
+    if (videoClipIndices.length === 1) {
+      // Single video clip — use its audio directly
+      const i = videoClipIndices[0]
+      fp.push(`[va${i}]afade=t=out:st=${Math.max(0, CLIP_DUR - 0.5).toFixed(2)}:d=0.5[aout]`)
+    } else {
+      // Concatenate audio from all video clips in order
+      const labels = videoClipIndices.map(i => `[va${i}]`).join('')
+      const fadeStart = Math.max(0, totalDuration - 2).toFixed(2)
+      fp.push(
+        `${labels}concat=n=${videoClipIndices.length}:v=0:a=1,`
+        + `afade=t=out:st=${fadeStart}:d=2,`
+        + `aformat=sample_rates=44100:channel_layouts=stereo[aout]`
+      )
+    }
+    audioLabel = 'aout'
   }
+  // Case C: no music, no video clips → audioLabel stays null → -an
 
   // ── Assemble command ────────────────────────────────────────────────────
   const filterComplex = fp.join(';\n')

@@ -44,6 +44,7 @@ export async function POST(
           eventId,
           plan: event.plan,
           userId: user.id,
+          purchase_type: 'one_off_event',
           custom_fields: [
             { display_name: 'Event Name', variable_name: 'event_name', value: event.name },
             { display_name: 'Plan', variable_name: 'plan', value: event.plan },

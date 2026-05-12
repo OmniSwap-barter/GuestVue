@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -13,6 +13,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [emailNotConfirmed, setEmailNotConfirmed] = useState(false)
+  const [justPaid, setJustPaid] = useState(false)
+
+  // Detect if the user landed here after a Paystack payment (session expired mid-checkout)
+  useEffect(() => {
+    if (document.cookie.includes('gv_just_paid=1')) {
+      setJustPaid(true)
+      // Clear the cookie so the banner only shows once
+      document.cookie = 'gv_just_paid=; max-age=0; path=/'
+    }
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -57,6 +67,12 @@ export default function LoginPage() {
         {/* Card */}
         <div className="bg-white rounded-2xl p-8 shadow-2xl border-t-4 border-[#14B8A6]">
           <h1 className="font-display font-bold text-2xl text-gray-900 mb-6">Welcome back</h1>
+
+          {justPaid && (
+            <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-sm mb-4">
+              ✅ <strong>Payment confirmed!</strong> Your plan has been upgraded. Sign in to access your new features.
+            </div>
+          )}
 
           {emailNotConfirmed && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-sm mb-4">

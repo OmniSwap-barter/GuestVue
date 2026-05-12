@@ -90,6 +90,29 @@ export async function middleware(request: NextRequest) {
     // Admin check done in the page itself via server component (avoids extra DB call in middleware)
   }
 
+  // ── Entitlement gate for creating new events ──────────────────────────────
+  // Authenticated users who have no active subscription and no event credits
+  // are sent to /pricing. Users with no row in user_entitlements are on the
+  // free tier and get a default credit, so they always pass.
+  if (user && pathname === '/dashboard/events/new') {
+    const { data: entitlement } = await supabase
+      .from('user_entitlements')
+      .select('subscription_status, event_credits, is_unlimited_events')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    // No row → free tier with default 1 credit: allow
+    if (entitlement) {
+      const hasActiveSubscription = entitlement.subscription_status === 'active'
+      const hasCredits            = (entitlement.event_credits ?? 0) > 0
+      const isUnlimited           = entitlement.is_unlimited_events === true
+
+      if (!hasActiveSubscription && !hasCredits && !isUnlimited) {
+        return NextResponse.redirect(new URL('/pricing', request.url))
+      }
+    }
+  }
+
   return response
 }
 

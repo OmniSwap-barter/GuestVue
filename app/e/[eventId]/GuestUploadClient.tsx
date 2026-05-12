@@ -56,6 +56,19 @@ function saveSession(eventId: string, data: SessionData) {
   } catch { /* ignore */ }
 }
 
+// Persist the guest's name so the gallery can pre-fill "Find my photos"
+function saveGuestName(eventId: string, name: string) {
+  try {
+    if (name.trim()) sessionStorage.setItem(`gv_name_${eventId}`, name.trim())
+  } catch { /* ignore */ }
+}
+
+export function getGuestName(eventId: string): string {
+  try {
+    return sessionStorage.getItem(`gv_name_${eventId}`) ?? ''
+  } catch { return '' }
+}
+
 // ─── Canvas image compression ────────────────────────────────────────────────
 async function compressImage(file: File): Promise<File> {
   if (file.type.startsWith('video/')) return file
@@ -105,12 +118,24 @@ export default function GuestUploadClient({ event, hostName, isExpired }: Props)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
-  const brandColor = event.custom_color || '#0A4F6B'
+  // ── Resolve landing config (landing_config takes precedence over legacy columns)
+  type LandingConfig = { welcome_msg?: string; accent_color?: string; logo_url?: string; show_guest_count?: boolean }
+  const lc = (event.landing_config as LandingConfig | null) ?? {}
+  const brandColor      = lc.accent_color ?? event.custom_color ?? '#0A4F6B'
+  const brandLogo       = lc.logo_url     ?? event.custom_logo  ?? null
+  const welcomeMsg      = lc.welcome_msg  ?? ''
+  const showGuestCount  = lc.show_guest_count ?? true
   const isAtLimit = event.upload_count >= event.upload_limit
 
-  // Load session from storage on mount
+  // Load session from storage on mount + track scan
   useEffect(() => {
     setSession(getSession(event.id))
+    // Track QR scan / page visit (fire-and-forget)
+    fetch(`/api/events/${event.id}/analytics`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ metric: 'scan' }),
+    }).catch(() => { /* non-fatal */ })
   }, [event.id])
 
   const sessionPhotosLeft = Math.max(0, SESSION_MAX_PHOTOS - session.photos)
@@ -295,8 +320,9 @@ export default function GuestUploadClient({ event, hostName, isExpired }: Props)
       >
         {/* Top branding area */}
         <div className="flex-1 flex flex-col items-center justify-center px-6 pt-12 pb-6 text-center">
-          {event.custom_logo ? (
-            <img src={event.custom_logo} alt={event.name} className="w-20 h-20 rounded-2xl object-cover mb-5 shadow-xl" />
+          {brandLogo ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={brandLogo} alt={event.name} className="h-16 max-w-[180px] object-contain mb-5 drop-shadow-lg" />
           ) : (
             <div className="w-20 h-20 rounded-2xl bg-white/25 backdrop-blur-sm flex items-center justify-center mb-5 shadow-xl">
               <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -317,8 +343,14 @@ export default function GuestUploadClient({ event, hostName, isExpired }: Props)
           )}
 
           <p className="text-white/80 text-base mt-6 max-w-xs leading-relaxed">
-            Share your photos and videos directly to the event gallery — no app needed! 📸
+            {welcomeMsg || 'Share your photos and videos directly to the event gallery — no app needed! 📸'}
           </p>
+
+          {showGuestCount && event.upload_count > 0 && (
+            <p className="text-white/50 text-sm mt-3">
+              📸 {event.upload_count.toLocaleString()} {event.upload_count === 1 ? 'memory' : 'memories'} shared
+            </p>
+          )}
         </div>
 
         {/* Welcome form card */}
@@ -367,7 +399,7 @@ export default function GuestUploadClient({ event, hostName, isExpired }: Props)
 
             {/* CTA */}
             <button
-              onClick={() => setStage('upload')}
+              onClick={() => { saveGuestName(event.id, guestName); setStage('upload') }}
               className="w-full min-h-[56px] flex items-center justify-center gap-2.5 font-black text-white text-base rounded-2xl transition-all active:scale-95 shadow-lg"
               style={{ backgroundColor: brandColor }}
             >
@@ -428,7 +460,9 @@ export default function GuestUploadClient({ event, hostName, isExpired }: Props)
         {/* Capacity bar */}
         <div className="mb-5">
           <div className="flex justify-between text-xs text-slate-500 mb-1.5">
-            <span>{event.upload_count.toLocaleString()} shared</span>
+            {showGuestCount
+              ? <span>{event.upload_count.toLocaleString()} shared</span>
+              : <span>&nbsp;</span>}
             <span>{remaining.toLocaleString()} spots left</span>
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">

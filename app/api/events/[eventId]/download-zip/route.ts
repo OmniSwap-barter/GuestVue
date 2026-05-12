@@ -1,115 +1,99 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { createAdminClient } from '@/lib/supabase/server'
+import { zipSync, strToU8 } from 'fflate'
 
-/**
- * Returns presigned R2 URLs for all event uploads.
- * Presigned URLs embed the credentials so the browser can download
- * directly from R2 (no proxy hop) with proper Content-Disposition headers.
- * Expiry: 5 minutes — enough to trigger all browser downloads.
- */
-
-function getR2Client() {
-  return new S3Client({
-    region: 'auto',
-    endpoint: process.env.R2_ENDPOINT || `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-    },
-    requestChecksumCalculation: 'WHEN_REQUIRED',
-    responseChecksumValidation: 'WHEN_REQUIRED',
-  })
-}
-
-function extractKey(url: string): string | null {
-  try {
-    const parsed = new URL(url)
-    const parts = parsed.pathname.split('/').filter(Boolean)
-    const bucket = process.env.R2_BUCKET_NAME || 'claude-guestvue'
-    if (parts[0] === bucket) return parts.slice(1).join('/')
-    return parts.join('/')
-  } catch {
-    return null
-  }
-}
+// Public endpoint — no auth required. Guests can download all event photos as a ZIP.
+// Files are fetched from Supabase Storage (public URLs) and zipped server-side.
+// Capped at 200 files to avoid memory issues on Vercel's 1792 MB limit.
+const MAX_FILES = 200
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
 ) {
-  // Next.js 15: params is async — must await
   const { eventId } = await params
-
-  const supabase = await createServerClient_server()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const admin = createAdminClient()
+
+  // Fetch event to get name (public — no auth needed)
   const { data: event } = await admin
     .from('events')
-    .select('id, name, plan')
+    .select('id, name, status')
     .eq('id', eventId)
-    .eq('host_id', user.id)
     .single() as any
 
-  if (!event) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  // Only Flex+ plans can bulk-download
-  if (event.plan === 'free') {
-    return NextResponse.json({ error: 'Bulk download requires Flex or Pro plan.' }, { status: 403 })
+  if (!event) {
+    return NextResponse.json({ error: 'Event not found' }, { status: 404 })
   }
 
+  // Fetch uploads from Supabase Storage (original_url is a public URL)
   const { data: uploads } = await admin
     .from('uploads')
-    .select('id, original_url, display_url, type, created_at')
+    .select('id, original_url, type, created_at')
     .eq('event_id', eventId)
     .in('status', ['ready', 'processing'])
-    .order('created_at', { ascending: true }) as any
+    .order('created_at', { ascending: true })
+    .limit(MAX_FILES) as any
 
-  const files = (uploads ?? []) as { id: string; original_url: string | null; display_url: string | null; type: string; created_at: string }[]
+  const files = (uploads ?? []) as {
+    id: string
+    original_url: string | null
+    type: string
+    created_at: string
+  }[]
 
-  const bucket = process.env.R2_BUCKET_NAME || 'claude-guestvue'
-  const r2 = getR2Client()
+  if (files.length === 0) {
+    return NextResponse.json({ error: 'No photos to download.' }, { status: 404 })
+  }
 
-  // Generate presigned URLs in parallel (max 5 min expiry)
-  const signed = await Promise.all(
+  // Fetch all files in parallel and build the zip payload
+  const fetched = await Promise.allSettled(
     files.map(async (u, i) => {
-      const rawUrl = u.original_url || u.display_url
-      if (!rawUrl) return null
+      const url = u.original_url
+      if (!url) return null
 
-      const key = extractKey(rawUrl)
-      if (!key) return null
+      const ext = u.type === 'video'
+        ? 'mp4'
+        : url.match(/\.(png|webp|gif|heic|jpeg)$/i)?.[1] ?? 'jpg'
 
-      const ext = u.type === 'video' ? 'mp4' : 'jpg'
-      const filename = `${event.name.replace(/[^\w\- ]/g, '').trim()}-${String(i + 1).padStart(3, '0')}.${ext}`
+      const filename = `${String(i + 1).padStart(3, '0')}.${ext}`
 
-      try {
-        const url = await getSignedUrl(
-          r2,
-          new GetObjectCommand({
-            Bucket: bucket,
-            Key: key,
-            ResponseContentDisposition: `attachment; filename="${filename}"`,
-            ResponseContentType: u.type === 'video' ? 'video/mp4' : 'image/jpeg',
-          }),
-          { expiresIn: 300 } // 5 minutes
-        )
-        return { url, filename, type: u.type }
-      } catch {
-        // If presigning fails (missing creds), fall back to proxy URL
-        const proxyUrl = `/api/download?url=${encodeURIComponent(rawUrl)}&filename=${encodeURIComponent(filename)}`
-        return { url: proxyUrl, filename, type: u.type }
-      }
+      const res = await fetch(url, { signal: AbortSignal.timeout(20_000) })
+      if (!res.ok) return null
+
+      const buf = await res.arrayBuffer()
+      return { filename, data: new Uint8Array(buf) }
     })
   )
 
-  const urls = signed.filter(Boolean) as { url: string; filename: string; type: string }[]
+  const zipFiles: Record<string, Uint8Array> = {}
+  for (const result of fetched) {
+    if (result.status === 'fulfilled' && result.value) {
+      const { filename, data } = result.value
+      zipFiles[filename] = data
+    }
+  }
 
-  return NextResponse.json({
-    urls,
-    eventName: event.name,
-    count: urls.length,
+  if (Object.keys(zipFiles).length === 0) {
+    return NextResponse.json({ error: 'Could not fetch any files.' }, { status: 500 })
+  }
+
+  // Add a small readme so the archive isn't completely bare
+  const safeName = event.name.replace(/[^a-zA-Z0-9 \-_]/g, '').trim()
+  zipFiles['README.txt'] = strToU8(
+    `Photos from: ${event.name}\nDownloaded via GuestVue — theguestvue.com\n`
+  )
+
+  const zipBuffer = zipSync(zipFiles, { level: 0 }) // level 0 = store, fast for already-compressed media
+
+  const zipFilename = `${safeName.replace(/\s+/g, '_') || 'GuestVue_Photos'}_${eventId.slice(0, 6)}.zip`
+
+  return new NextResponse(Buffer.from(zipBuffer), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="${zipFilename}"`,
+      'Content-Length': String(zipBuffer.byteLength),
+      'Cache-Control': 'no-store',
+    },
   })
 }

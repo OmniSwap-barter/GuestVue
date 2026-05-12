@@ -1,16 +1,15 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
-import GuestUploadClient from './GuestUploadClient'
+import GalleryView from './GalleryView'
 
 interface Props {
   params: Promise<{ eventId: string }>
 }
 
-export default async function GuestPage({ params }: Props) {
+export default async function EventGalleryPage({ params }: Props) {
   const { eventId } = await params
   const supabase = createAdminClient()
 
-  // Fetch event (public — no auth needed)
   const { data: event } = await supabase
     .from('events')
     .select('*')
@@ -19,27 +18,57 @@ export default async function GuestPage({ params }: Props) {
 
   if (!event) return notFound()
 
-  // Check if event page is active
-  const now = new Date()
-  const isExpired =
-    event.status === 'expired' ||
-    (event.page_expires_at && new Date(event.page_expires_at) < now)
+  // Most-recently published complete reel (published_to_gallery flag set by host)
+  const { data: reel } = await supabase
+    .from('reels')
+    .select('id, output_url, status')
+    .eq('event_id', eventId)
+    .eq('status', 'complete')
+    .eq('published_to_gallery', true)
+    .not('output_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  // Get host profile for branding
-  const { data: host } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', event.host_id)
-    .single()
+  // Only show approved (or not-yet-moderated, i.e. approved IS NULL) uploads.
+  // The approved column defaults to true, so existing uploads always pass.
+  // Rejected uploads (approved = false) are hidden from guests.
+  const { data: uploadsWithNames } = await supabase
+    .from('uploads')
+    .select('id, original_url, display_url, type, created_at, guest_name')
+    .eq('event_id', eventId)
+    .in('status', ['ready', 'processing'])
+    .or('approved.is.null,approved.eq.true')
+    .order('created_at', { ascending: false })
+    .limit(500)
+
+  // Fallback without guest_name for type safety
+  const uploads = uploadsWithNames
+
+  const finalUploads = (uploadsWithNames ?? uploads ?? []) as Array<{
+    id: string
+    original_url: string
+    display_url: string | null
+    type: string
+    created_at: string
+    guest_name?: string | null
+  }>
 
   return (
-    <GuestUploadClient
-      event={event}
-      hostName={host?.full_name ?? null}
-      isExpired={!!isExpired}
+    <GalleryView
+      event={{
+        id: event.id,
+        name: event.name,
+        hashtag: event.hashtag ?? null,
+        custom_color: event.custom_color ?? null,
+        custom_logo: event.custom_logo ?? null,
+        status: event.status,
+        upload_count: event.upload_count,
+      }}
+      reelUrl={reel?.output_url ?? null}
+      initialUploads={finalUploads}
     />
   )
 }
 
-// This page is public — no caching, always fresh
 export const dynamic = 'force-dynamic'

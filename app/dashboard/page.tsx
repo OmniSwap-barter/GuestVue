@@ -89,28 +89,28 @@ export default async function DashboardPage({ searchParams }: Props) {
   const planLabel = ACCOUNT_TYPE_LABELS[planType] ?? (planType.charAt(0).toUpperCase() + planType.slice(1))
 
   return (
-    <div className="min-h-screen" style={{ background: '#f1f5f9' }}>
+    <div className="min-h-screen" style={{ background: '#060D1A' }}>
 
       {/* ── Top Nav ─────────────────────────────────────────────────────── */}
-      <header className="bg-white border-b border-slate-100 sticky top-0 z-40">
+      <header className="sticky top-0 z-40" style={{ background: '#0A1628', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
             <Image src="/logo.svg" alt="GuestVue" width={30} height={30} />
-            <span className="font-display font-black text-slate-900 hidden sm:block">GuestVue</span>
+            <span className="font-display font-black text-white hidden sm:block">GuestVue</span>
           </Link>
           <nav className="flex items-center gap-1">
             {(isPlanner || isBusiness || isCorporate) && (
               <Link href="/dashboard/analytics"
-                className="px-3 py-2 text-sm font-medium text-slate-500 hover:text-[#14B8A6] rounded-lg hover:bg-[#14B8A6]/5 transition-all hidden sm:block">
+                className="px-3 py-2 text-sm font-medium text-white/60 hover:text-[#14B8A6] rounded-lg hover:bg-[#14B8A6]/5 transition-all hidden sm:block">
                 Analytics
               </Link>
             )}
             <Link href="/dashboard/affiliate"
-              className="px-3 py-2 text-sm font-medium text-slate-500 hover:text-[#14B8A6] rounded-lg hover:bg-[#14B8A6]/5 transition-all hidden sm:block">
+              className="px-3 py-2 text-sm font-medium text-white/60 hover:text-[#14B8A6] rounded-lg hover:bg-[#14B8A6]/5 transition-all hidden sm:block">
               Affiliate
             </Link>
             <Link href="/dashboard/settings"
-              className="px-3 py-2 text-sm font-medium text-slate-500 hover:text-[#14B8A6] rounded-lg hover:bg-[#14B8A6]/5 transition-all hidden sm:block">
+              className="px-3 py-2 text-sm font-medium text-white/60 hover:text-[#14B8A6] rounded-lg hover:bg-[#14B8A6]/5 transition-all hidden sm:block">
               Settings
             </Link>
             <SignOutButton />
@@ -185,13 +185,14 @@ export default async function DashboardPage({ searchParams }: Props) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
             { label: 'Active Events', value: activeEvents.length, color: '#14B8A6' },
-            { label: 'Total Events', value: events?.length ?? 0, color: '#1E5AAF' },
+            { label: 'Total Events', value: events?.length ?? 0, color: '#14B8A6' },
             { label: 'Photos Collected', value: totalUploads.toLocaleString(), color: '#E8735C' },
-            { label: 'Plan', value: planLabel, color: '#0A4F6B' },
+            { label: 'Plan', value: planLabel, color: '#E8735C' },
           ].map(stat => (
-            <div key={stat.label} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+            <div key={stat.label} className="rounded-2xl p-4"
+              style={{ background: '#0A1628', border: '1px solid rgba(255,255,255,0.08)' }}>
               <p className="font-display font-black text-2xl" style={{ color: stat.color }}>{stat.value}</p>
-              <p className="text-xs text-slate-400 mt-0.5 font-medium">{stat.label}</p>
+              <p className="text-xs text-white/50 mt-0.5 font-medium">{stat.label}</p>
             </div>
           ))}
         </div>
@@ -199,26 +200,38 @@ export default async function DashboardPage({ searchParams }: Props) {
         {/* ── Quick actions ────────────────────────────────────────────────── */}
         <div className={`grid gap-3 mb-8 ${isBusiness || isCorporate ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <Link href="/dashboard/events/new"
-            className="bg-white border border-slate-100 rounded-2xl p-4 text-center hover:border-[#14B8A6]/40 hover:shadow-md transition-all group">
+            className="rounded-2xl p-4 text-center transition-all group"
+            style={{ background: '#0A1628', border: '1px solid rgba(255,255,255,0.08)' }}
+            onMouseOver={e => (e.currentTarget.style.borderColor = 'rgba(20,184,166,0.4)')}
+            onMouseOut={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}>
             <div className="text-2xl mb-2">🎉</div>
-            <p className="text-sm font-semibold text-slate-700 group-hover:text-[#14B8A6] transition-colors">Create Event</p>
+            <p className="text-sm font-semibold text-white/70 group-hover:text-[#14B8A6] transition-colors">Create Event</p>
           </Link>
           {(isBusiness || isCorporate) && (
             <Link href="/dashboard/analytics"
-              className="bg-white border border-slate-100 rounded-2xl p-4 text-center hover:border-[#E8735C]/40 hover:shadow-md transition-all group">
+              className="rounded-2xl p-4 text-center transition-all group"
+              style={{ background: '#0A1628', border: '1px solid rgba(255,255,255,0.08)' }}
+              onMouseOver={e => (e.currentTarget.style.borderColor = 'rgba(232,115,92,0.4)')}
+              onMouseOut={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}>
               <div className="text-2xl mb-2">📊</div>
-              <p className="text-sm font-semibold text-slate-700 group-hover:text-[#E8735C] transition-colors">Analytics</p>
+              <p className="text-sm font-semibold text-white/70 group-hover:text-[#E8735C] transition-colors">Analytics</p>
             </Link>
           )}
           <Link href="/dashboard/affiliate"
-            className="bg-white border border-slate-100 rounded-2xl p-4 text-center hover:border-[#1E5AAF]/40 hover:shadow-md transition-all group">
+            className="rounded-2xl p-4 text-center transition-all group"
+            style={{ background: '#0A1628', border: '1px solid rgba(255,255,255,0.08)' }}
+            onMouseOver={e => (e.currentTarget.style.borderColor = 'rgba(30,90,175,0.4)')}
+            onMouseOut={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}>
             <div className="text-2xl mb-2">🔗</div>
-            <p className="text-sm font-semibold text-slate-700 group-hover:text-[#1E5AAF] transition-colors">Affiliate</p>
+            <p className="text-sm font-semibold text-white/70 group-hover:text-[#14B8A6] transition-colors">Affiliate</p>
           </Link>
           <Link href="/dashboard/settings"
-            className="bg-white border border-slate-100 rounded-2xl p-4 text-center hover:border-[#E8735C]/40 hover:shadow-md transition-all group">
+            className="rounded-2xl p-4 text-center transition-all group"
+            style={{ background: '#0A1628', border: '1px solid rgba(255,255,255,0.08)' }}
+            onMouseOver={e => (e.currentTarget.style.borderColor = 'rgba(232,115,92,0.4)')}
+            onMouseOut={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')}>
             <div className="text-2xl mb-2">⚙️</div>
-            <p className="text-sm font-semibold text-slate-700 group-hover:text-[#E8735C] transition-colors">Settings</p>
+            <p className="text-sm font-semibold text-white/70 group-hover:text-[#E8735C] transition-colors">Settings</p>
           </Link>
         </div>
 
@@ -238,6 +251,28 @@ export default async function DashboardPage({ searchParams }: Props) {
                 Upgrade
               </Link>
             </div>
+          </div>
+        )}
+
+        {/* ── Active plan strip — shown to all paid tiers so it's clear the upgrade worked ── */}
+        {!isFree && (
+          <div className="mb-8 rounded-2xl p-4 flex items-center gap-4" style={{ background: '#0A1628', border: '1px solid rgba(20,184,166,0.25)' }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'rgba(20,184,166,0.15)' }}>
+              <span className="text-xl">{isPlanner ? '📋' : isBusiness ? '🏢' : isCorporate ? '🌐' : '✨'}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-white text-sm">{planLabel} plan — active</p>
+              <p className="text-xs text-white/50 mt-0.5">
+                {isPlanner  && 'Unlimited events · AI Reels · Client galleries'}
+                {isBusiness && 'Unlimited events · Bulk download · Priority rendering · White-label ready'}
+                {isCorporate && 'Enterprise access · Sub-accounts · API-ready · Dedicated support'}
+              </p>
+            </div>
+            <span className="flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full"
+              style={{ background: 'rgba(20,184,166,0.15)', color: '#14B8A6', border: '1px solid rgba(20,184,166,0.3)' }}>
+              ✓ Active
+            </span>
           </div>
         )}
 
@@ -365,9 +400,9 @@ export default async function DashboardPage({ searchParams }: Props) {
         )}
 
         {/* ── Events list ─────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="font-display font-bold text-lg text-slate-900">
+        <div className="rounded-2xl overflow-hidden" style={{ background: '#0A1628', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <h2 className="font-display font-bold text-lg text-white">
               {isPlanner ? 'Client Events' : isBusiness ? 'Campaigns' : 'Your Events'}
             </h2>
             <Link href="/dashboard/events/new"
@@ -393,7 +428,7 @@ export default async function DashboardPage({ searchParams }: Props) {
               </Link>
             </div>
           ) : (
-            <div className="divide-y divide-slate-50">
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
               {events.map(event => {
                 const pct = Math.round((event.upload_count / event.upload_limit) * 100)
                 const isActive = event.status === 'active'
@@ -401,24 +436,27 @@ export default async function DashboardPage({ searchParams }: Props) {
                   <Link
                     key={event.id}
                     href={`/dashboard/events/${event.id}`}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-all group"
+                    className="flex items-center gap-4 px-5 py-4 transition-all group"
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+                    onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                    onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
                   >
                     {/* Status dot */}
                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                      isActive ? 'bg-[#14B8A6] animate-pulse' : 'bg-slate-200'
+                      isActive ? 'bg-[#14B8A6] animate-pulse' : 'bg-white/20'
                     }`} />
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-900 text-sm truncate group-hover:text-[#0A4F6B] transition-colors">
+                      <p className="font-semibold text-white text-sm truncate group-hover:text-[#14B8A6] transition-colors">
                         {event.name}
                       </p>
                       <div className="flex items-center gap-3 mt-1">
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-white/40">
                           {event.upload_count}/{event.upload_limit} uploads
                         </p>
                         {event.event_date && (
-                          <p className="text-xs text-slate-300">
+                          <p className="text-xs text-white/25">
                             {new Date(event.event_date).toLocaleDateString('en-NG', {
                               day: 'numeric', month: 'short', year: 'numeric'
                             })}
@@ -426,7 +464,7 @@ export default async function DashboardPage({ searchParams }: Props) {
                         )}
                       </div>
                       {/* Progress bar */}
-                      <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full overflow-hidden w-36">
+                      <div className="mt-1.5 h-1.5 rounded-full overflow-hidden w-36" style={{ background: 'rgba(255,255,255,0.08)' }}>
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
@@ -440,15 +478,12 @@ export default async function DashboardPage({ searchParams }: Props) {
                     </div>
 
                     {/* Plan badge */}
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-lg flex-shrink-0 ${
-                      event.plan === 'pro' ? 'bg-[#0A4F6B]/10 text-[#0A4F6B]' :
-                      event.plan === 'flex' ? 'bg-[#1E5AAF]/10 text-[#1E5AAF]' :
-                      'bg-slate-100 text-slate-500'
-                    }`}>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-lg flex-shrink-0 text-[#14B8A6]"
+                      style={{ background: 'rgba(20,184,166,0.10)', border: '1px solid rgba(20,184,166,0.20)' }}>
                       {event.plan.toUpperCase()}
                     </span>
 
-                    <span className="text-slate-300 group-hover:text-[#14B8A6] transition-colors text-lg">→</span>
+                    <span className="text-white/30 group-hover:text-[#14B8A6] transition-colors text-lg">→</span>
                   </Link>
                 )
               })}

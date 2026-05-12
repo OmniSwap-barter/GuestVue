@@ -8,7 +8,51 @@ const MAX_VIDEO_BYTES = 200 * 1024 * 1024  // 200 MB
 // Supabase Storage bucket for guest uploads (public bucket, no R2 credentials needed)
 const STORAGE_BUCKET = 'event-uploads'
 
-// Simple IP-based rate limiting via Supabase (5 uploads/IP/minute)
+// ── Per-session type limits: 3 photos + 1 video ──────────────────────────────
+// Enforced per guestSessionId within the last 24 hours.
+// Prevents a single guest from monopolising an event's upload slots.
+// Limits: free/flex events → 3 photos + 1 video; pro/business → 10 + 3.
+const SESSION_LIMITS = {
+  default: { photos: 3, videos: 1 },
+  pro:     { photos: 10, videos: 3 },
+}
+
+async function checkSessionLimits(
+  supabase: ReturnType<typeof createAdminClient>,
+  guestSessionId: string,
+  eventId: string,
+  incomingType: 'photo' | 'video',
+  plan: string,
+): Promise<string | null> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const limits = (plan === 'pro' || plan === 'business' || plan === 'corporate')
+    ? SESSION_LIMITS.pro
+    : SESSION_LIMITS.default
+
+  const { data: sessionUploads } = await supabase
+    .from('uploads')
+    .select('type')
+    .eq('event_id', eventId)
+    .eq('guest_session_id', guestSessionId)
+    .gte('created_at', since)
+    .neq('status', 'deleted')
+
+  const counts = { photo: 0, video: 0 }
+  for (const u of sessionUploads ?? []) {
+    if (u.type === 'photo') counts.photo++
+    else if (u.type === 'video') counts.video++
+  }
+
+  if (incomingType === 'photo' && counts.photo >= limits.photos) {
+    return `You've reached the ${limits.photos}-photo limit for this event. Thank you for sharing!`
+  }
+  if (incomingType === 'video' && counts.video >= limits.videos) {
+    return `You've reached the ${limits.videos}-video limit for this event.`
+  }
+  return null
+}
+
+// ── IP-based rate limiting: 5 uploads per IP per minute ──────────────────────
 async function checkRateLimit(supabase: ReturnType<typeof createAdminClient>, ipHash: string) {
   const since = new Date(Date.now() - 60_000).toISOString()
   const { count } = await supabase
@@ -42,6 +86,8 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
     const eventId = formData.get('eventId') as string | null
+    const guestName = (formData.get('guestName') as string | null)?.trim() || null
+    const guestSessionId = (formData.get('guestSessionId') as string | null)?.trim() || null
 
     if (!file || !eventId) {
       return NextResponse.json({ error: 'Missing file or eventId.' }, { status: 400 })
@@ -82,7 +128,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (event.upload_count >= event.upload_limit) {
-      return NextResponse.json({ error: 'Upload limit reached for this event.' }, { status: 403 })
+      return NextResponse.json(
+        { error: 'This event has reached its upload limit. The host will need to upgrade the event to accept more photos.' },
+        { status: 403 }
+      )
     }
 
     // ── Rate limit ────────────────────────────────────────────────────────────
@@ -98,6 +147,20 @@ export async function POST(req: NextRequest) {
         { error: 'Too many uploads — please wait a minute.' },
         { status: 429 }
       )
+    }
+
+    // ── Per-session type limits (only when sessionId is present) ─────────────
+    if (guestSessionId) {
+      const limitMsg = await checkSessionLimits(
+        supabase,
+        guestSessionId,
+        eventId,
+        isVideo ? 'video' : 'photo',
+        event.plan,
+      )
+      if (limitMsg) {
+        return NextResponse.json({ error: limitMsg }, { status: 429 })
+      }
     }
 
     // ── Upload to Supabase Storage ────────────────────────────────────────────
@@ -144,6 +207,8 @@ export async function POST(req: NextRequest) {
         moderation_ok: true,
         guest_ip_hash: ipHash,
         flagged_for_reel: true,
+        guest_name: guestName,
+        guest_session_id: guestSessionId,
       })
       .select('id')
       .single()

@@ -348,38 +348,54 @@ export default function InvitationBuilder({ event }: Props) {
       {/* ── Print CSS: isolate the invitation card, force background colors ───── */}
       <style>{`
         @media print {
-          /* Hide everything on the page */
-          body > * { visibility: hidden !important; }
-          header, nav, footer, aside { display: none !important; }
+          /* ── Step 1: hide everything, then reveal only the card ─────────── */
+          /* Using visibility rather than display:none so layout isn't destroyed */
+          body * { visibility: hidden !important; }
 
-          /* Show only the invitation card */
           #${PRINT_CARD_ID},
           #${PRINT_CARD_ID} * {
             visibility: visible !important;
           }
 
-          /* Center card on the printed page */
+          /* ── Step 2: position card at top-left in normal flow ────────────── */
+          /* CRITICAL: position:fixed removes element from document flow, causing */
+          /* a blank first page. position:absolute keeps it in flow.              */
           #${PRINT_CARD_ID} {
-            position: fixed !important;
-            top: 50% !important;
+            position: absolute !important;
+            top: 0 !important;
             left: 50% !important;
-            transform: translate(-50%, -50%) !important;
+            transform: translateX(-50%) !important;
             width: 420px !important;
+            height: auto !important;
             border-radius: 20px !important;
             box-shadow: none !important;
             margin: 0 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
 
-          /* Force background gradients to print (most browsers suppress by default) */
+          /* ── Step 3: force background colors & gradients ─────────────────── */
+          /* Browsers suppress backgrounds by default in print. These overrides  */
+          /* ensure the card gradient and colors actually print.                 */
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
           }
 
+          /* ── Step 4: page geometry ───────────────────────────────────────── */
           @page {
             size: A5 landscape;
-            margin: 10mm;
+            margin: 8mm;
+          }
+
+          /* ── Step 5: clean up html/body so nothing else bleeds through ───── */
+          html, body {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            overflow: hidden !important;
           }
         }
       `}</style>

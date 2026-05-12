@@ -211,6 +211,45 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
     }
   }
 
+  // ─── Settings: landing page config ──────────────────────────────────────
+  type LandingConfig = { welcome_msg: string; accent_color: string; logo_url: string; show_guest_count: boolean }
+  const initLc = (): LandingConfig => {
+    const lc = event.landing_config as Partial<LandingConfig> | null
+    return {
+      welcome_msg:      lc?.welcome_msg      ?? '',
+      accent_color:     lc?.accent_color     ?? (event.custom_color || '#14B8A6'),
+      logo_url:         lc?.logo_url         ?? (event.custom_logo  || ''),
+      show_guest_count: lc?.show_guest_count ?? true,
+    }
+  }
+  const [lc, setLc]           = useState<LandingConfig>(initLc)
+  const [lcSaving, setLcSaving] = useState(false)
+  const [lcSaved, setLcSaved]   = useState(false)
+  const [lcError, setLcError]   = useState('')
+
+  async function saveLandingConfig() {
+    setLcSaving(true)
+    setLcError('')
+    try {
+      const res = await fetch(`/api/events/${event.id}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ landing_config: lc }),
+      })
+      if (res.ok) {
+        setLcSaved(true)
+        setTimeout(() => setLcSaved(false), 3000)
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setLcError(d.error || 'Failed to save. Please try again.')
+      }
+    } catch {
+      setLcError('Network error. Please try again.')
+    } finally {
+      setLcSaving(false)
+    }
+  }
+
   // ─── Settings: delete event ──────────────────────────────────────────────
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -342,6 +381,20 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
             {t.label}
           </button>
         ))}
+        {/* Moderation — navigates to dedicated page */}
+        <Link
+          href={`/dashboard/events/${event.id}/moderation`}
+          className="flex-shrink-0 px-3 py-2 text-sm font-semibold rounded-lg transition-all text-slate-500 hover:text-slate-700 flex items-center gap-1"
+        >
+          🛡 Moderation
+        </Link>
+        {/* Analytics — navigates to dedicated page */}
+        <Link
+          href={`/dashboard/events/${event.id}/analytics`}
+          className="flex-shrink-0 px-3 py-2 text-sm font-semibold rounded-lg transition-all text-slate-500 hover:text-slate-700 flex items-center gap-1"
+        >
+          📊 Analytics
+        </Link>
       </div>
 
       {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
@@ -363,6 +416,19 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
                   <button onClick={copyLink} className="px-4 py-2 bg-[#0A4F6B] text-white text-sm font-bold rounded-xl hover:bg-[#1E5AAF] transition-all flex-shrink-0">
                     {copied ? '✓ Copied!' : 'Copy'}
                   </button>
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(`📸 Share your photos from ${event.name}! Scan the QR or tap: ${guestUrl}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 text-white text-sm font-bold rounded-xl flex-shrink-0 flex items-center gap-1.5 transition-all hover:opacity-90"
+                    style={{ background: '#25D366' }}
+                    title="Share on WhatsApp"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    </svg>
+                    WhatsApp
+                  </a>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {event.qr_url && (
@@ -778,6 +844,124 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
               </div>
             </div>
           </div>
+          {/* ── Landing page customisation ──────────────────────────────── */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-5">
+            <div>
+              <h3 className="font-bold text-slate-900">Guest landing page</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Customise what guests see when they scan your QR code.
+                Changes apply immediately — no republish needed.
+              </p>
+            </div>
+
+            {/* Welcome message */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                Welcome message
+              </label>
+              <textarea
+                value={lc.welcome_msg}
+                onChange={e => setLc(p => ({ ...p, welcome_msg: e.target.value }))}
+                placeholder={`Welcome to ${event.name}! 🎉 Scan to share your photos and videos.`}
+                rows={2}
+                maxLength={200}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#14B8A6]/30 focus:border-[#14B8A6] resize-none"
+              />
+              <p className="text-xs text-slate-400 mt-1">{lc.welcome_msg.length}/200 characters</p>
+            </div>
+
+            {/* Accent colour */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                Accent colour
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={lc.accent_color}
+                  onChange={e => setLc(p => ({ ...p, accent_color: e.target.value }))}
+                  className="w-10 h-10 rounded-lg cursor-pointer border border-slate-200 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-sm text-slate-700 font-mono">{lc.accent_color}</p>
+                  <p className="text-xs text-slate-400">Buttons, borders and highlights on the guest page</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Logo URL */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                Brand logo URL
+              </label>
+              <input
+                type="url"
+                value={lc.logo_url}
+                onChange={e => setLc(p => ({ ...p, logo_url: e.target.value }))}
+                placeholder="https://example.com/logo.png"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#14B8A6]/30 focus:border-[#14B8A6]"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Paste a public image URL (PNG/SVG). Shown above the upload form.
+                {' '}
+                <a href={`/dashboard/events/${event.id}/upload-logo`} className="text-[#14B8A6] hover:underline">
+                  Upload logo →
+                </a>
+              </p>
+              {lc.logo_url && (
+                <div className="mt-2 p-2 rounded-xl border border-slate-100 bg-slate-50 inline-block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={lc.logo_url} alt="Logo preview" className="h-10 object-contain" onError={e => (e.currentTarget.style.display = 'none')} />
+                </div>
+              )}
+            </div>
+
+            {/* Show guest count toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">Show upload count</p>
+                <p className="text-xs text-slate-400">Display "X photos shared" on the guest page</p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={lc.show_guest_count}
+                onClick={() => setLc(p => ({ ...p, show_guest_count: !p.show_guest_count }))}
+                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${lc.show_guest_count ? 'bg-[#14B8A6]' : 'bg-slate-300'}`}
+              >
+                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${lc.show_guest_count ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+
+            {/* Live preview strip */}
+            <div
+              className="rounded-xl p-4 border text-center"
+              style={{ background: `${lc.accent_color}12`, borderColor: `${lc.accent_color}40` }}
+            >
+              {lc.logo_url && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={lc.logo_url} alt="" className="h-8 object-contain mx-auto mb-2" onError={e => (e.currentTarget.style.display = 'none')} />
+              )}
+              <p className="text-sm font-bold" style={{ color: lc.accent_color }}>
+                {lc.welcome_msg || `Welcome to ${event.name}! 🎉`}
+              </p>
+              {lc.show_guest_count && (
+                <p className="text-xs mt-1 text-slate-500">{event.upload_count ?? 0} memories shared</p>
+              )}
+              <p className="text-xs mt-2 text-slate-400">↑ Guest page preview</p>
+            </div>
+
+            {lcError && <p className="text-sm text-red-600">{lcError}</p>}
+
+            <button
+              onClick={saveLandingConfig}
+              disabled={lcSaving}
+              className="w-full py-3 rounded-xl text-white font-bold text-sm disabled:opacity-60 transition-all hover:opacity-90"
+              style={{ background: lcSaved ? '#10b981' : 'linear-gradient(135deg, #14B8A6, #1E5AAF)' }}
+            >
+              {lcSaving ? 'Saving…' : lcSaved ? '✓ Saved!' : 'Save landing page'}
+            </button>
+          </div>
+
           <div className="bg-red-50 border border-red-100 rounded-2xl p-5">
             <h3 className="font-semibold text-red-700 mb-2">Danger zone</h3>
             <p className="text-xs text-red-500 mb-3">Deleting an event permanently removes all uploads, QR codes, and reels. This cannot be undone.</p>

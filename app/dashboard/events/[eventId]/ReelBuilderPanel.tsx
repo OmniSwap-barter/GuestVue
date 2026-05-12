@@ -85,7 +85,7 @@ function stageFromStatus(status: string) {
 }
 
 type BuilderStatus = 'idle' | 'uploading_logo' | 'submitting' | 'error'
-type EditorTab = 'themes' | 'timeline' | 'music' | 'text' | 'branding'
+type EditorTab = 'themes' | 'timeline' | 'music' | 'text' | 'branding' | 'speed'
 
 // ── Tier limits ───────────────────────────────────────────────────────────────
 const TIER_LABEL: Record<string, string> = {
@@ -95,6 +95,57 @@ const TIER_LABEL: Record<string, string> = {
   planner: 'Event Planner',
   business: 'Business',
   corporate: 'Corporate',
+}
+
+// ─── Download Reel Button ────────────────────────────────────────────────────
+// Supabase Storage URLs are cross-origin — the HTML <a download> attribute is
+// ignored for cross-origin resources. We fetch the blob locally so the browser
+// saves it with the right filename instead of just opening a new tab.
+function DownloadReelButton({
+  url, filename, className, style, label = '⬇ Save',
+}: {
+  url: string
+  filename: string
+  className?: string
+  style?: React.CSSProperties
+  label?: string
+}) {
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave(e: React.MouseEvent) {
+    e.preventDefault()
+    if (saving) return
+    setSaving(true)
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1500)
+    } catch {
+      // Fallback: open in new tab (user can long-press → save on mobile)
+      window.open(url, '_blank')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleSave}
+      disabled={saving}
+      className={className}
+      style={style}
+    >
+      {saving ? '⏳ Saving…' : label}
+    </button>
+  )
 }
 
 // ─── Upgrade Modal ──────────────────────────────────────────────────────────
@@ -331,10 +382,12 @@ function DraftWorkspace({
                   style={{ background: 'linear-gradient(135deg,#14B8A6,#0A4F6B)' }}>
                   ▶ Watch
                 </a>
-                <a href={videoUrl} download={`${eventName}-reel.mp4`}
-                  className="flex-1 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-center">
-                  ⬇ Save
-                </a>
+                <DownloadReelButton
+                  url={videoUrl}
+                  filename={`${eventName}-reel.mp4`}
+                  label="⬇ Save"
+                  className="flex-1 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-center disabled:opacity-60"
+                />
               </>
             )}
             <button onClick={onRegenerate}
@@ -393,10 +446,12 @@ function PublishedReelCard({
                 className="flex-1 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-center">
                 ▶ Watch
               </a>
-              <a href={videoUrl} download={`${eventName}-reel.mp4`}
-                className="flex-1 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-center">
-                ⬇ Download
-              </a>
+              <DownloadReelButton
+                url={videoUrl}
+                filename={`${eventName}-reel.mp4`}
+                label="⬇ Download"
+                className="flex-1 py-2.5 text-sm font-semibold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-center disabled:opacity-60"
+              />
             </>
           )}
           <button onClick={onNewReel}
@@ -432,6 +487,7 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
   const [selectedTransition, setSelectedTransition] = useState('fade')
   const [orderedIds, setOrderedIds] = useState<string[]>([])
   const [musicTrack, setMusicTrack] = useState<string>('afrobeats_upbeat')
+  const [clipSpeed, setClipSpeed] = useState<0.5 | 1.0 | 1.5 | 2.5>(1.0)
   const [textTitle, setTextTitle] = useState('')
   const [textCaption, setTextCaption] = useState('')
   const [textOutro, setTextOutro] = useState('')
@@ -457,6 +513,15 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
       const res = await fetch(`/api/events/${event.id}/reels`)
       if (!res.ok) return
       const data = await res.json()
+      const latest = data.reels?.[0] ?? null
+      // Diagnostic log — helps confirm output_url / draft_url are set by worker
+      console.log('[ReelBuilder] loadReels — latest reel:', JSON.stringify({
+        id:          latest?.id,
+        status:      latest?.status,
+        output_url:  latest?.output_url ?? null,
+        draft_url:   latest?.draft_url  ?? null,
+        published:   latest?.published_to_gallery,
+      }, null, 2))
       setReels(data.reels ?? [])
     } catch { /* ignore */ }
     finally { setLoadingReels(false) }
@@ -572,6 +637,7 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
           transition: preset.transition,
           textOverlays: { title: preset.label },
           logoPosition: 'outro',
+          clipSpeed,
         }),
       })
       const data = await res.json()
@@ -626,6 +692,7 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
             transition: selectedTransition,
             textOverlays,
             logoPosition,
+            clipSpeed,
           }),
         })
       } finally {
@@ -838,6 +905,7 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
               { id: 'music',    label: '🎵 Music'     },
               { id: 'text',     label: '✏️ Text'      },
               { id: 'branding', label: '🏷 Branding'  },
+              { id: 'speed',    label: '⚡ Speed'     },
             ] as { id: EditorTab; label: string }[]).map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                 className={`flex-shrink-0 px-4 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
@@ -1164,6 +1232,51 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
                       Remove — ₦5,000
                     </button>
                   )}
+                </div>
+              </div>
+            )}
+            {activeTab === 'speed' && (
+              <div className="space-y-5">
+                <div>
+                  <p className="text-xs font-bold text-slate-700 mb-1">Video clip speed</p>
+                  <p className="text-xs text-slate-400 mb-3">
+                    Controls how fast video clips play inside the reel. Photos are always static.
+                    0.5× = cinematic slow-motion · 2.5× = fast-cut energy.
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {([
+                      { value: 0.5, label: '0.5×', desc: 'Slow-mo' },
+                      { value: 1.0, label: '1×',   desc: 'Normal'  },
+                      { value: 1.5, label: '1.5×', desc: 'Punchy'  },
+                      { value: 2.5, label: '2.5×', desc: 'Hyper'   },
+                    ] as { value: 0.5 | 1.0 | 1.5 | 2.5; label: string; desc: string }[]).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setClipSpeed(opt.value)}
+                        className={`p-3 rounded-xl border text-center transition-all ${
+                          clipSpeed === opt.value
+                            ? 'border-[#0A4F6B] bg-[#0A4F6B]/5'
+                            : 'border-slate-100 hover:border-slate-300'
+                        }`}
+                      >
+                        <p className={`text-base font-black ${clipSpeed === opt.value ? 'text-[#0A4F6B]' : 'text-slate-800'}`}>
+                          {opt.label}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 p-4 border border-slate-100 text-xs text-slate-500 leading-relaxed">
+                  <p className="font-semibold text-slate-600 mb-1">⚡ How speed works</p>
+                  <p>
+                    Speed is applied via FFmpeg <code className="bg-slate-100 px-1 rounded">setpts</code> and{' '}
+                    <code className="bg-slate-100 px-1 rounded">atempo</code> filters on the Railway worker.
+                    Audio from video clips is pitch-corrected automatically.
+                    Affects video clips only — photos always display for the same duration.
+                  </p>
                 </div>
               </div>
             )}
