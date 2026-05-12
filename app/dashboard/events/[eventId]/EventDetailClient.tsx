@@ -19,6 +19,7 @@ import Link from 'next/link'
 import type { Database } from '@/types/database'
 import { createClient } from '@/lib/supabase/client'
 import ReelBuilderPanel from './ReelBuilderPanel'
+import { useUpgradeModal } from '@/components/UpgradeModal'
 
 type Event = Database['public']['Tables']['events']['Row']
 type Upload = Database['public']['Tables']['uploads']['Row']
@@ -34,6 +35,7 @@ type MediaFilter = 'all' | 'photos' | 'videos'
 
 export default function EventDetailClient({ event, initialUploads, profile }: Props) {
   const router = useRouter()
+  const upgrade = useUpgradeModal()
   const [tab, setTab] = useState<TabId>('overview')
   const [uploads, setUploads] = useState<Upload[]>(initialUploads)
   // Seed from either the DB counter OR the actual length of loaded uploads —
@@ -322,6 +324,7 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
 
   return (
     <div>
+      {upgrade.modal}
       {/* Event header */}
       <div className="mb-6">
         <div className="flex items-start gap-3 mb-1">
@@ -561,9 +564,9 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
                       : `Download all (${uploads.length})`}
                   </button>
                 ) : (
-                  <Link href="/pricing" className="text-xs font-semibold text-[#E8735C] hover:underline">
+                  <button onClick={upgrade.show} className="text-xs font-semibold text-[#E8735C] hover:underline">
                     Upgrade for bulk download
-                  </Link>
+                  </button>
                 )}
               </div>
 
@@ -574,9 +577,9 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
                     <p className="font-semibold text-[#0A4F6B] text-sm">Unlock bulk download with Flex — ₦24,999</p>
                     <p className="text-xs text-slate-500 mt-0.5">Download all photos at once and display a live slideshow.</p>
                   </div>
-                  <Link href="/pricing" className="bg-[#0A4F6B] text-white text-xs font-bold px-3 py-2 rounded-xl hover:opacity-90 flex-shrink-0">
+                  <button onClick={upgrade.show} className="bg-[#0A4F6B] text-white text-xs font-bold px-3 py-2 rounded-xl hover:opacity-90 flex-shrink-0">
                     Upgrade
-                  </Link>
+                  </button>
                 </div>
               )}
 
@@ -639,9 +642,9 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
               <p className="text-sm text-white/60 mb-5 max-w-sm mx-auto">
                 Display an auto-cycling slideshow of guest photos on a screen at your event. Available on Flex and Pro.
               </p>
-              <Link href="/pricing" className="inline-block bg-[#14B8A6] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-all text-sm shadow-lg">
-                Upgrade to Flex — ₦24,999 →
-              </Link>
+              <button onClick={upgrade.show} className="inline-block bg-[#14B8A6] text-white font-bold px-6 py-3 rounded-xl hover:opacity-90 transition-all text-sm shadow-lg">
+                Upgrade to unlock Slideshow →
+              </button>
             </div>
           ) : slideshowMedia.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-100 py-16 text-center">
