@@ -501,16 +501,13 @@ async function buildFFmpegReel({
     for (let i = 1; i < mediaFiles.length; i++) {
       const raw = xfadeTransitions[(i - 1) % xfadeTransitions.length] ?? 'fade'
       const t   = VALID_XFADE.has(raw) ? raw : 'fade'
-      // Cumulative xfade offset: each clip contributes CLIP_DUR to the output timeline.
-      // The i-th transition (1-indexed) starts when (i) full clips have played.
-      // offset = i * CLIP_DUR - XFADE_DUR
-      //   i=1: 3.0 - 0.5 = 2.5s  (was i*EFFECTIVE=2.5 — same ✓)
-      //   i=2: 6.0 - 0.5 = 5.5s  (was i*EFFECTIVE=5.0 — 0.5s too early ✗)
-      //   i=3: 9.0 - 0.5 = 8.5s  (was i*EFFECTIVE=7.5 — 1.0s too early ✗)
-      // The old formula drifted by (i-1)*XFADE_DUR per transition, triggering xfade
-      // before the prior clip finished — producing invalid/overlapping frame ranges
-      // that caused error -22 (Invalid argument) in the filter_complex thread.
-      const offset = (i * CLIP_DUR - XFADE_DUR).toFixed(3)
+      // offset = i × EFFECTIVE = i × (CLIP_DUR - XFADE_DUR)
+      // Each prior xfade shortens the cumulative timeline by XFADE_DUR,
+      // so the offset must account for that shrinkage — not use raw CLIP_DUR.
+      //   i=1: 1×2.5 = 2.5s — [v0]  is 3.0s long, blend needs t=2.5→3.0 ✓
+      //   i=2: 2×2.5 = 5.0s — [xf1] is 5.5s long, blend needs t=5.0→5.5 ✓
+      //   i=3: 3×2.5 = 7.5s — [xf2] is 8.0s long, blend needs t=7.5→8.0 ✓
+      const offset = (i * EFFECTIVE).toFixed(3)
       const outLabel = i === mediaFiles.length - 1 ? 'vbase' : `xf${i}`
       fp.push(`[${curLabel}][v${i}]xfade=transition=${t}:duration=${XFADE_DUR}:offset=${offset}[${outLabel}]`)
       curLabel = outLabel
