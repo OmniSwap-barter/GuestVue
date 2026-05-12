@@ -566,68 +566,34 @@ async function buildFFmpegReel({
     videoLabel = 'vfinal'
   }
 
-  // 5. Audio chain — three cases:
+  // 5. Audio chain — two cases:
   //
-  //    A) Background music track selected:
-  //       Trim music to reel length, fade out last 2s, normalise volume.
-  //       Video clip audio is intentionally dropped so the music is clean.
-  //       This is the "highlight reel" UX — music is the primary soundtrack.
+  //    A) Music selected: trim to reel length, fade out, normalise volume.
   //
-  //    B) No music + video clips with audio:
-  //       Extract each video clip's audio stream, speed-adjust with atempo,
-  //       then concatenate in clip order. This fixes the "silent reel" bug
-  //       where reels containing videos came out completely silent.
-  //
-  //    C) No music + photo-only reel: -an (silent, correct behaviour).
+  //    B) No music → -an (silent). Raw video-clip audio ([i:a]) is intentionally
+  //       NOT extracted. Many mobile uploads (HEVC, iOS Live Photos, screen
+  //       recordings) have no audio stream at all. Referencing [i:a] on a
+  //       stream-less file causes FFmpeg error -22 (Invalid argument) which
+  //       aborts the entire render — video AND audio encoders both fail,
+  //       producing "Nothing was written into output file". The drawtext-strip
+  //       fallback retry doesn't help because the broken audio filter is still
+  //       present. Removing Case B entirely eliminates this class of crash.
+  //       Highlight reels use music as their primary soundtrack anyway.
   //
   let audioLabel: string | null = null
 
-  const videoClipIndices = mediaFiles
-    .map((mf, i) => (mf.type === 'video' ? i : -1))
-    .filter(i => i >= 0)
-
   if (musicInputIdx >= 0) {
-    // ── Case A: background music ───────────────────────────────────────────
+    // Music selected: trim to reel length, fade out last 2s, normalise
     const fadeStart = Math.max(0, totalDuration - 2).toFixed(2)
     fp.push(
       `[${musicInputIdx}:a]atrim=0:${totalDuration.toFixed(3)},`
       + `afade=t=out:st=${fadeStart}:d=2,`
-      + `volume=0.88,`                          // slight normalisation headroom
+      + `volume=0.88,`
       + `aformat=sample_rates=44100:channel_layouts=stereo[aout]`
     )
     audioLabel = 'aout'
-
-  } else if (videoClipIndices.length > 0) {
-    // ── Case B: no music — use video clip audio, speed-adjusted ───────────
-    for (const i of videoClipIndices) {
-      const mf      = mediaFiles[i]
-      const srcDur  = (CLIP_DUR * mf.speed).toFixed(3)
-      const atempo  = buildAtempoChain(mf.speed)
-      // atrim matches the same window we cut for the video track
-      fp.push(
-        `[${i}:a]atrim=0:${srcDur},asetpts=PTS-STARTPTS,`
-        + `${atempo},`
-        + `aformat=sample_rates=44100:channel_layouts=stereo[va${i}]`
-      )
-    }
-
-    if (videoClipIndices.length === 1) {
-      // Single video clip — use its audio directly
-      const i = videoClipIndices[0]
-      fp.push(`[va${i}]afade=t=out:st=${Math.max(0, CLIP_DUR - 0.5).toFixed(2)}:d=0.5[aout]`)
-    } else {
-      // Concatenate audio from all video clips in order
-      const labels = videoClipIndices.map(i => `[va${i}]`).join('')
-      const fadeStart = Math.max(0, totalDuration - 2).toFixed(2)
-      fp.push(
-        `${labels}concat=n=${videoClipIndices.length}:v=0:a=1,`
-        + `afade=t=out:st=${fadeStart}:d=2,`
-        + `aformat=sample_rates=44100:channel_layouts=stereo[aout]`
-      )
-    }
-    audioLabel = 'aout'
   }
-  // Case C: no music, no video clips → audioLabel stays null → -an
+  // No music → audioLabel stays null → cmd gets -an below
 
   // ── Assemble command ────────────────────────────────────────────────────
   const filterComplex = fp.join(';\n')
