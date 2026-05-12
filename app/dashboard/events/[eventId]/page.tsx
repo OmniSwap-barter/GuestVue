@@ -52,7 +52,7 @@ export default async function EventDetailPage({ params, searchParams }: Props) {
     : { plan_type: 'free', is_unlimited: false }
 
   return (
-    <div className="min-h-screen bg-cloud">
+    <div className="min-h-screen bg-cloud overflow-x-hidden">
       {/* Nav */}
       <header className="bg-white border-b border-midnight-100 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">

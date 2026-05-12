@@ -845,7 +845,7 @@ export default function ReelBuilderPanel({ event, photos, videos = [], profile }
         />
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-4 overflow-x-hidden">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

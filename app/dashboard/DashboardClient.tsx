@@ -50,7 +50,7 @@ export default function DashboardClient({
   const planLabel  = ACCOUNT_TYPE_LABELS[planType] ?? (planType.charAt(0).toUpperCase() + planType.slice(1))
 
   return (
-    <div className="min-h-screen" style={{ background: '#060D1A' }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ background: '#060D1A' }}>
       {showUpgrade && <UpgradeModal onClose={() => setShowUpgrade(false)} />}
 
       {/* ── Top Nav ─────────────────────────────────────────────────────── */}
@@ -160,7 +160,7 @@ export default function DashboardClient({
         </div>
 
         {/* ── Quick actions ────────────────────────────────────────────────── */}
-        <div className={`grid gap-3 mb-8 ${isBusiness || isCorporate ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        <div className={`grid gap-3 mb-8 ${isBusiness || isCorporate ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
           <Link href="/dashboard/events/new"
             className="rounded-2xl p-4 text-center transition-all group"
             style={{ background: '#0A1628', border: '1px solid rgba(255,255,255,0.08)' }}
@@ -341,7 +341,7 @@ export default function DashboardClient({
                 Corporate
               </span>
             </div>
-            <div className="grid sm:grid-cols-4" style={{ background: '#0A1628', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div className="grid grid-cols-2 sm:grid-cols-4" style={{ background: '#0A1628', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
               {[
                 { icon: '📅', label: 'Total Events', value: events.length },
                 { icon: '🔴', label: 'Active',        value: activeEventCount },
@@ -399,7 +399,7 @@ export default function DashboardClient({
                   <Link
                     key={event.id}
                     href={`/dashboard/events/${event.id}`}
-                    className="flex items-center gap-4 px-5 py-4 transition-all group"
+                    className="flex items-center gap-3 px-4 sm:px-5 py-4 transition-all group"
                     style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
                     onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
                     onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
@@ -427,7 +427,7 @@ export default function DashboardClient({
                         )}
                       </div>
                       {/* Progress bar */}
-                      <div className="mt-1.5 h-1.5 rounded-full overflow-hidden w-36" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                      <div className="mt-1.5 h-1.5 rounded-full overflow-hidden w-full max-w-[9rem]" style={{ background: 'rgba(255,255,255,0.08)' }}>
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
@@ -440,13 +440,13 @@ export default function DashboardClient({
                       </div>
                     </div>
 
-                    {/* Plan badge */}
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-lg flex-shrink-0 text-[#14B8A6]"
+                    {/* Plan badge — hidden on smallest screens to prevent overflow */}
+                    <span className="hidden sm:inline-block text-xs font-bold px-2.5 py-1 rounded-lg flex-shrink-0 text-[#14B8A6]"
                       style={{ background: 'rgba(20,184,166,0.10)', border: '1px solid rgba(20,184,166,0.20)' }}>
                       {event.plan.toUpperCase()}
                     </span>
 
-                    <span className="text-white/30 group-hover:text-[#14B8A6] transition-colors text-lg">→</span>
+                    <span className="text-white/30 group-hover:text-[#14B8A6] transition-colors flex-shrink-0">→</span>
                   </Link>
                 )
               })}

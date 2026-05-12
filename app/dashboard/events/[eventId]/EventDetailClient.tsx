@@ -323,7 +323,7 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
   ]
 
   return (
-    <div>
+    <div className="overflow-x-hidden">
       {upgrade.modal}
       {/* Event header */}
       <div className="mb-6">
@@ -414,8 +414,9 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
               </div>
               <div className="flex-1">
                 <p className="text-sm text-slate-500 mb-3">Share this link or print the QR. Guests scan to upload — no app needed.</p>
-                <div className="flex gap-2 mb-4">
-                  <input readOnly value={guestUrl} className="flex-1 px-3 py-2 text-sm bg-slate-50 border border-slate-100 rounded-xl text-slate-700 font-mono truncate" />
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <input readOnly value={guestUrl} className="flex-1 min-w-0 px-3 py-2 text-sm bg-slate-50 border border-slate-100 rounded-xl text-slate-700 font-mono truncate" style={{ minWidth: '8rem' }} />
+                  <div className="flex gap-2 flex-shrink-0">
                   <button onClick={copyLink} className="px-4 py-2 bg-[#0A4F6B] text-white text-sm font-bold rounded-xl hover:bg-[#1E5AAF] transition-all flex-shrink-0">
                     {copied ? '✓ Copied!' : 'Copy'}
                   </button>
@@ -432,7 +433,8 @@ export default function EventDetailClient({ event, initialUploads, profile }: Pr
                     </svg>
                     WhatsApp
                   </a>
-                </div>
+                  </div>{/* end button row */}
+                </div>{/* end url+buttons flex */}
                 <div className="flex flex-wrap gap-2 mt-2">
                   {event.qr_url && (
                     <a href={event.qr_url} download={`${event.name}-QR.png`} className="text-sm text-slate-500 hover:text-slate-700 underline">

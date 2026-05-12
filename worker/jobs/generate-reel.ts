@@ -10,7 +10,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { writeFile, readFile, mkdir, rm } from 'fs/promises'
-import { existsSync } from 'fs'
+import { existsSync, statSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
@@ -274,7 +274,18 @@ export async function generateReel(args: GenerateReelArgs) {
       tmpDir,
     })
 
-    // ── Upload reel (R2 → Supabase Storage fallback) ──────────────────────
+    // ── Guard: reject suspiciously small files before uploading ───────────
+    // A valid 9:16 MP4 with at least a few clips is always well over 50 KB.
+    // If FFmpeg exited non-zero but left a partial file, this catches it.
+    const fileSize = statSync(outputPath).size
+    if (fileSize < 50_000) {
+      throw new Error(
+        `FFmpeg produced a suspiciously small file (${fileSize} bytes) — likely a failed or empty render`
+      )
+    }
+    console.log(`[generate-reel] Output file size: ${(fileSize / 1024).toFixed(0)} KB`)
+
+    // ── Upload reel (Supabase Storage) ─────────────────────────────────────
     const reelBuf = await readFile(outputPath)
     const reelKey = `events/${eventId}/reels/${reelId}.mp4`
     const outputUrl = await uploadReelOutput(reelKey, reelBuf, 'video/mp4')
@@ -640,8 +651,8 @@ async function buildFFmpegReel({
       const ffStderr = (err.stderr ?? '').trim()
       const ffMsg    = (err.message ?? '').trim()
       console.error('[reel] FFmpeg error:', (ffStderr || ffMsg).slice(-800))
-      if (existsSync(outputPath)) {
-        console.warn('[reel] FFmpeg non-zero exit but output exists — proceeding')
+      if (existsSync(outputPath) && statSync(outputPath).size >= 50_000) {
+        console.warn('[reel] FFmpeg non-zero exit but valid output exists — proceeding')
         return true
       }
       return ffStderr || ffMsg || 'FFmpeg failed'
