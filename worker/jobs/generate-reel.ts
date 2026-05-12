@@ -385,6 +385,16 @@ async function buildFFmpegReel({
   const colorGrade = theme ? (THEME_COLOR_GRADE[theme] ?? '') : ''
   const totalDuration = EFFECTIVE * mediaFiles.length + XFADE_DUR
 
+  // ── Pre-flight guards — catch bad inputs before FFmpeg sees them ────────
+  if (mediaFiles.length === 0) {
+    throw new Error('No valid media files to render — all inputs were skipped or failed to download')
+  }
+  if (totalDuration < 1) {
+    throw new Error(
+      `Computed duration is ${totalDuration.toFixed(3)}s — too short to render. Check clip durations.`
+    )
+  }
+
   // ── Download logo ──────────────────────────────────────────────────────
   let logoPath: string | null = null
   if (logoUrl) {
@@ -401,11 +411,17 @@ async function buildFFmpegReel({
 
   // ── Build -i input args ─────────────────────────────────────────────────
   const inputArgs: string[] = []
+  // Clamp: photos must hold for at least 1.5s so the concat/xfade filter has
+  // enough frames to work with. CLIP_DUR is always ≥3.0 from the constants above,
+  // but this guard makes it explicit and safe if those constants are ever touched.
+  const holdDuration = Math.max(CLIP_DUR, 1.5)
+
   for (const mf of mediaFiles) {
     if (mf.type === 'video') {
-      inputArgs.push('-stream_loop', '-1', '-t', String(CLIP_DUR + 1), '-i', mf.localPath)
+      // +1 headroom so xfade can blend into the next clip without running out of frames
+      inputArgs.push('-stream_loop', '-1', '-t', String(holdDuration + 1), '-i', mf.localPath)
     } else {
-      inputArgs.push('-loop', '1', '-t', String(CLIP_DUR + 1), '-i', mf.localPath)
+      inputArgs.push('-loop', '1', '-t', String(holdDuration + 1), '-i', mf.localPath)
     }
   }
 
@@ -651,6 +667,8 @@ async function buildFFmpegReel({
       const ffStderr = (err.stderr ?? '').trim()
       const ffMsg    = (err.message ?? '').trim()
       console.error('[reel] FFmpeg error:', (ffStderr || ffMsg).slice(-800))
+      // Log the exact command so it can be reproduced locally
+      console.error('[FFMPEG CMD]', FFMPEG_BIN, args.join(' '))
       if (existsSync(outputPath) && statSync(outputPath).size >= 50_000) {
         console.warn('[reel] FFmpeg non-zero exit but valid output exists — proceeding')
         return true
