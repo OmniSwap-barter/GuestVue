@@ -50,10 +50,16 @@ export async function GET(req: NextRequest) {
       })
       .eq('id', userId)
 
-    // Write entitlements so middleware gate and subscription checks work
-    const isUnlimited = ['business', 'corporate', 'planner_pro', 'business_scale'].includes(
-      planId ?? resolvedAccountType
-    )
+    // Write entitlements so middleware gate and subscription checks work.
+    // is_unlimited_events = true for account types/plans that don't cap per-event usage.
+    const UNLIMITED_PLAN_IDS = new Set([
+      'business', 'corporate',           // account types
+      'tycoon', 'activation',            // business plan IDs
+      'growth', 'scale', 'jagaban',      // planner plan IDs (high event counts)
+    ])
+    const isUnlimited = UNLIMITED_PLAN_IDS.has(planId ?? '') ||
+                        UNLIMITED_PLAN_IDS.has(resolvedAccountType)
+
     await admin.from('user_entitlements')
       .upsert({
         user_id: userId,

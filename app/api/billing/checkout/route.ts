@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient_server, createAdminClient } from '@/lib/supabase/server'
 
-// Plan registry — keeps pricing canonical, referenced by planId
+// ── Plan registry ──────────────────────────────────────────────────────────────
+// Plan IDs MUST match lib/pricing.ts exactly. accountType is what gets written
+// to profiles.plan_type on successful payment.
 const PLAN_PRICES: Record<string, { priceKobo: number; label: string; accountType: string }> = {
-  // Planner bundles (one-time)
-  planner_starter:  { priceKobo:  4999900, label: 'Planner Starter — ₦49,999/mo',  accountType: 'planner'  },
-  planner_pro:      { priceKobo:  9999900, label: 'Planner Pro — ₦99,999/mo',      accountType: 'planner'  },
-  // Business subscriptions
-  business_growth:  { priceKobo:  7999900, label: 'Business Growth — ₦79,999/mo',  accountType: 'business' },
-  business_scale:   { priceKobo: 14999900, label: 'Business Scale — ₦149,999/mo',  accountType: 'business' },
+  // ─ Personal / per-event (one-time) ─────────────────────────────────────────
+  flex:       { priceKobo:  2499900, label: 'Flex — ₦24,999/event',              accountType: 'individual' },
+  pro:        { priceKobo:  4999900, label: 'Pro — ₦49,999/event',               accountType: 'individual' },
+  // ─ Planner bundles (one-time) ───────────────────────────────────────────────
+  starter:    { priceKobo:  5399900, label: 'Planner Starter — ₦53,999',         accountType: 'planner'   },
+  growth:     { priceKobo:  9499900, label: 'Planner Growth — ₦94,999',          accountType: 'planner'   },
+  scale:      { priceKobo: 17999900, label: 'Planner Scale — ₦179,999',          accountType: 'planner'   },
+  jagaban:    { priceKobo: 35000000, label: 'Industry Jagaban — ₦350,000',       accountType: 'planner'   },
+  // ─ Business subscriptions (monthly) ────────────────────────────────────────
+  activation: { priceKobo:  5399700, label: 'Business Activation — ₦53,997/mo', accountType: 'business'  },
+  tycoon:     { priceKobo:  8999500, label: 'Business Tycoon — ₦89,995/mo',     accountType: 'business'  },
 }
 
-// GET /api/billing/checkout?planId=...&accountType=...
-// Logged-in users arrive here from pricing page plan buttons.
-// We initialize a Paystack checkout and redirect them straight there.
-// Unauthenticated users are sent to login with a ?next= param.
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const planId      = searchParams.get('planId') ?? ''
-  const accountType = searchParams.get('accountType') ?? ''
-  const appUrl      = process.env.NEXT_PUBLIC_APP_URL || 'https://theguestvue.com'
+// ── Core checkout logic — shared by GET and POST ───────────────────────────
+async function initializeCheckout(req: NextRequest, planId: string, accountType: string) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://theguestvue.com'
 
   const plan = PLAN_PRICES[planId]
   if (!plan) {
@@ -31,8 +32,7 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      // Not logged in → send to LOGIN (not signup) so existing accounts don't
-      // get stuck. After login, Paystack checkout re-initialises from /pricing.
+      // Not logged in → send to LOGIN (not signup) so existing accounts don't get stuck.
       return NextResponse.redirect(`${appUrl}/auth/login?next=/pricing`)
     }
 
@@ -50,14 +50,14 @@ export async function GET(req: NextRequest) {
         reference: `billing_${user.id}_${planId}_${Date.now()}`,
         callback_url: `${appUrl}/api/onboarding/callback?planId=${planId}&accountType=${resolvedAccountType}&userId=${user.id}`,
         metadata: {
-          userId: user.id,
+          userId:        user.id,
           planId,
-          accountType: resolvedAccountType,
+          accountType:   resolvedAccountType,
           purchase_type: 'subscription',
-          target_tier: resolvedAccountType,
-          plan_id: planId,
+          target_tier:   resolvedAccountType,
+          plan_id:       planId,
           custom_fields: [
-            { display_name: 'Plan', variable_name: 'plan', value: plan.label },
+            { display_name: 'Plan',         variable_name: 'plan',         value: plan.label         },
             { display_name: 'Account Type', variable_name: 'account_type', value: resolvedAccountType },
           ],
         },
@@ -69,16 +69,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${appUrl}/pricing?error=payment_init_failed`)
     }
 
-    // Record pending payment
+    // Record pending payment (maybeSingle silently ignores duplicate refs on Paystack retries)
     const admin = createAdminClient()
     await admin.from('payments').insert({
-      user_id: user.id,
+      user_id:      user.id,
       paystack_ref: body.data.reference,
-      amount_kobo: plan.priceKobo,
-      plan: planId,
-      type: 'subscription',
-      status: 'pending',
-      metadata: { accountType: resolvedAccountType, planId },
+      amount_kobo:  plan.priceKobo,
+      plan:         planId,
+      type:         'subscription',
+      status:       'pending',
+      metadata:     { accountType: resolvedAccountType, planId },
     })
 
     return NextResponse.redirect(body.data.authorization_url)
@@ -86,4 +86,30 @@ export async function GET(req: NextRequest) {
     console.error('Billing checkout error:', err)
     return NextResponse.redirect(`${appUrl}/pricing?error=server_error`)
   }
+}
+
+// GET /api/billing/checkout?planId=...&accountType=...
+// Used by pricing page <Link> buttons.
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  return initializeCheckout(
+    req,
+    searchParams.get('planId') ?? '',
+    searchParams.get('accountType') ?? '',
+  )
+}
+
+// POST /api/billing/checkout  { planId, accountType }
+// Used by dashboard upgrade modal — fetch() call from the client.
+export async function POST(req: NextRequest) {
+  let planId = '', accountType = ''
+  try {
+    const body = await req.json()
+    planId      = body.planId      ?? ''
+    accountType = body.accountType ?? ''
+  } catch {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://theguestvue.com'
+    return NextResponse.redirect(`${appUrl}/pricing?error=invalid_request`)
+  }
+  return initializeCheckout(req, planId, accountType)
 }

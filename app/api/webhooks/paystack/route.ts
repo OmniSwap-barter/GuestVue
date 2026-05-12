@@ -79,9 +79,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Profile update failed' }, { status: 500 })
           }
 
-          const isUnlimited = ['business', 'corporate', 'business_scale', 'planner_pro'].includes(
-            plan_id || target_tier
-          )
+          const UNLIMITED_PLAN_IDS = new Set([
+            'business', 'corporate',
+            'tycoon', 'activation',
+            'growth', 'scale', 'jagaban',
+          ])
+          const isUnlimited = UNLIMITED_PLAN_IDS.has(plan_id) || UNLIMITED_PLAN_IDS.has(target_tier)
 
           const { error: entitlementErr } = await supabase
             .from('user_entitlements')
