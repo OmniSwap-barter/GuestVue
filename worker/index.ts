@@ -103,6 +103,30 @@ if (process.env.REDIS_URL) {
   const connection = new IORedis(redisUrl, {
     maxRetriesPerRequest: null,   // required by BullMQ workers
     enableReadyCheck: false,      // required for Upstash
+
+    // Exponential backoff: 2s, 4s, 8s … capped at 30s, stops after 10 attempts.
+    // Without this, ioredis hammers Redis on every error (default: immediate retry)
+    // which burns through Upstash's free-tier command quota in minutes.
+    retryStrategy: (times: number) => {
+      if (times > 10) {
+        console.error(`[bullmq] Redis retry limit reached (${times} attempts) — giving up`)
+        return null  // stop retrying; worker stays up for HTTP dispatch
+      }
+      const delay = Math.min(times * 2000, 30_000)
+      console.warn(`[bullmq] Redis reconnect attempt ${times} — waiting ${delay}ms`)
+      return delay
+    },
+
+    // Never reconnect on a rate-limit error — reconnecting immediately triggers
+    // another command which counts against the quota, making the problem worse.
+    reconnectOnError: (err: Error) => {
+      if (err.message.includes('max requests limit') || err.message.includes('RATE_LIMIT')) {
+        console.error('[bullmq] Redis rate limit hit — NOT reconnecting to avoid quota burn')
+        return false
+      }
+      return true  // reconnect on all other errors (network blips, timeouts, etc.)
+    },
+
     tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
   })
   connection.on('error', (err: Error) => {
