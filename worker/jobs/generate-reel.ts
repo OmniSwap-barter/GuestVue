@@ -439,10 +439,18 @@ async function buildFFmpegReel({
 
   for (const mf of mediaFiles) {
     if (mf.type === 'video') {
-      // +1 headroom so xfade can blend into the next clip without running out of frames
-      inputArgs.push('-stream_loop', '-1', '-t', String(holdDuration + 1), '-i', mf.localPath)
+      // Supply enough source material for the clip at its playback speed, plus:
+      //   • XFADE_DUR so the xfade has frames past the nominal clip end
+      //   • 1.5s extra headroom for stream_loop PTS stitching artefacts
+      // Without this, high-speed clips (1.5×, 2.5×) exhaust source frames before
+      // the trim completes, producing a shorter-than-expected output that makes
+      // xfade request frames past the stream's end → EINVAL (-22).
+      const videoInputDur = (CLIP_DUR * mf.speed + XFADE_DUR + 1.5).toFixed(3)
+      inputArgs.push('-stream_loop', '-1', '-t', videoInputDur, '-i', mf.localPath)
     } else {
-      inputArgs.push('-loop', '1', '-t', String(holdDuration + 1), '-i', mf.localPath)
+      // Photos: loop a still frame; hold for clip duration + xfade overlap + headroom
+      const photoInputDur = (holdDuration + XFADE_DUR + 1).toFixed(3)
+      inputArgs.push('-loop', '1', '-t', photoInputDur, '-i', mf.localPath)
     }
   }
 
@@ -477,18 +485,28 @@ async function buildFFmpegReel({
     const mf = mediaFiles[i]
     const grade = colorGrade ? `,${colorGrade}` : ''
     if (mf.type === 'photo') {
+      // format=yuv420p: JPEGs decode as yuvj420p (full-range). xfade requires
+      // both inputs to share the same pixel format. Explicit conversion here
+      // prevents the "Terminating thread with return code -22" EINVAL error that
+      // occurs when a full-range photo and a limited-range video clip are xfaded.
       fp.push(
         `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,`
         + `crop=1080:1920,setsar=1,`
-        + `fps=30,setpts=PTS-STARTPTS${grade}[v${i}]`
+        + `fps=30,setpts=PTS-STARTPTS${grade},format=yuv420p[v${i}]`
       )
     } else {
-      const srcDur   = (CLIP_DUR * mf.speed).toFixed(3)  // source seconds to consume
+      // Trim slightly past CLIP_DUR (by XFADE_DUR + 0.1 s) so the xfade always
+      // has real frames to blend with — never hits an exact-boundary frame miss.
+      // Without the buffer, trim=0:CLIP_DUR produces a stream that ends at
+      // exactly the moment xfade needs its last frame → EINVAL at frame boundary.
+      const trimEnd  = (CLIP_DUR * mf.speed + XFADE_DUR + 0.1).toFixed(3)
       const speedStr = mf.speed !== 1.0 ? `,setpts=PTS/${mf.speed}` : ''
+      // fps=30 + format=yuv420p: normalise framerate and pixel format so every
+      // xfade input is homogeneous regardless of source codec/container.
       fp.push(
         `[${i}:v]scale=1080:1920:force_original_aspect_ratio=increase,`
         + `crop=1080:1920,setsar=1,`
-        + `trim=0:${srcDur},setpts=PTS-STARTPTS${grade}${speedStr}[v${i}]`
+        + `trim=0:${trimEnd},setpts=PTS-STARTPTS${grade}${speedStr},fps=30,format=yuv420p[v${i}]`
       )
     }
   }
